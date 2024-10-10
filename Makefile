@@ -101,7 +101,7 @@ UPLOAD_PORT        ?= /dev/ttyACM0
 # Directory used to build files in, contains all the build files, from object
 # files to the final hex file on linux it is best to put an absolute path
 # like /home/username/tmp .
-BUILD_DIR          ?= /home/balint/Arduino/tmp
+BUILD_DIR          ?= ~/Arduino/tmp
 
 # This defines whether Liquid_TWI2 support will be built
 LIQUID_TWI2        ?= 0
@@ -956,10 +956,15 @@ all: sizeafter
 connect:
 	minicom
 
-run_batch:
-	~/Desktop/arduino/ino2cpp.sh
+ino2cpp:
+	path="$(/bin/pwd)/*.ino"
+	ino=( $path )
+	mkdir -p "$(dirname $ino)/src" 
+	cpp="$(dirname $ino)/src/$(basename "$ino" .ino).cpp"
+	cp $ino $cpp
+	sed -i '1s/^/#include <Arduino.h>\n /' $cpp
 
-build: run_batch elf hex bin
+build: ino2cpp elf hex bin
 
 elf: $(BUILD_DIR)/$(TARGET).elf
 bin: $(BUILD_DIR)/$(TARGET).bin
@@ -1066,7 +1071,7 @@ clean:
 	$P rm -rf $(BUILD_DIR)
 
 
-.PHONY: all build elf hex eep lss sym program coff extcoff clean depend sizebefore sizeafter run_batch connect
+.PHONY: all build elf hex eep lss sym program coff extcoff clean depend sizebefore sizeafter ino2cpp connect
 
 # Automatically include the dependency files created by gcc
 -include ${patsubst %.o, %.d, ${OBJ}}
