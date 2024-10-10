@@ -1,3 +1,7 @@
+// ToDo: Split into multiple parts
+// ToDo: Split debug and no debug code
+// ToDo: Precise performance test
+
 // ---------------------- user defined ----------------------
 //#define ROM_START	    0xFFEE		// load porta to portb
 //#define ROM_START	    0xFFE0		// led runner with interrupt and disable
@@ -43,7 +47,7 @@
 #define FAST_IO 0
 #endif
 
-// bit defines
+// ---------------------- bit defines ----------------------
 
 #define BIT(nth_bit)                    (1U << (nth_bit)) //bit(nth_bit)
 #define CHECK_BIT(data, bit)            ((data) & BIT(bit)) //bitRead(data, bit)
@@ -64,7 +68,7 @@ typedef uint8_t uint4_t;
 #define ADD_BYTE(a, b)                  (static_cast<uint8_t>((a) + (b)))
 #define SUB_BYTE(a, b)                  (static_cast<uint8_t>((a) - (b)))
 
-// data defines
+// ---------------------- data defines ----------------------
 
 #define RAM_START             0x0000
 #define ROM_END               0xFFFF
@@ -152,7 +156,7 @@ static_assert(ROM_LENGTH >= VECTOR_BYTE_COUNT, "ROM doesn't has enough bytes to 
 
 static_assert(RAM_LENGTH <= RAM_MAX_SIZE, "Don't have enough memory for local variables");
 
-//ram & rom setup
+// ---------------------- ram & rom setup ----------------------
 uint8_t RAM[RAM_LENGTH];
 
 #if CHECK_BIT(VIA_SUPPORT, 2)
@@ -248,7 +252,7 @@ uint8_t RAM_T2LL;
 #define RELATIVE_ROM_ADDRESS(address) ((address) - ROM_START)
 #define ABSOLUTE_ROM_ADDRESS(address) ((address) + ROM_START)
 
-// register setup
+// ---------------------- register setup ----------------------
 
 enum Flags
 {
@@ -282,7 +286,7 @@ uint16_t pc = RESB;
 
 uint8_t op_code;
 
-// debug functions
+// ---------------------- debug functions ----------------------
 #if DEBUG != 0
 void print_hex_byte(uint8_t num, bool print_zero = true)
 {
@@ -396,7 +400,7 @@ void print_help()
 }
 #endif
 
-//ram & rom functions
+// ---------------------- ram & rom functions ----------------------
 uint16_t tmp_word;
 uint8_t tmp_byte;
 
@@ -782,6 +786,8 @@ static inline void sbc_bit_set() { set_flags(a, Negative | Zero); }
 #else
 	#define OP_WORD(txt)
 #endif
+
+// ---------------------- Runnable ----------------------
 
 void irqb()
 {
