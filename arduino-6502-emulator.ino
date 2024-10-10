@@ -321,6 +321,7 @@ void print_ram()
 		Serial.print(F("\n0000"));
 		uint16_t y_address = y2 * 32;
 		print_hex_word(y_address, false);
+
 		for(uint8_t x2 = 0; x2 < 32; ++x2)
 		{
 			uint16_t address = x2 + y_address;
@@ -385,6 +386,13 @@ void print_status()
 	Serial.print(F("- "));
 	print_hex_byte(p);
 	Serial.println();
+}
+
+void print_help()
+{
+	Serial.println(F(
+		"a: rAm\no: rOm\ne: rEgister\ns: Status register\ng: Go (dont wait for keypress)\np: Pause (wait for keypress)\nh: Help"
+	));
 }
 #endif
 
@@ -513,7 +521,6 @@ static void READ_PORTS(bool is_pina)
 {
 	if(is_pina)
 	{
-		uint8_t* port = &RAM[MY_PORTA];
 		uint8_t ddr = RAM[MY_DDRA];
 		// PORTC A0 - A5
 		// PORTD D3 - D4
@@ -523,12 +530,11 @@ static void READ_PORTS(bool is_pina)
 		const uint8_t c_mask = 0b00111111;
 		const uint8_t d_mask = 0b00011000;
 		
-		*port = ((c & c_mask) >> 0) & ~ddr;     // 0-5 -> 0-5
-		*port |= ((d & d_mask) >> 3) & ~ddr;    // 3-4 -> 6-7
+		RAM[MY_PORTA] = ((c & c_mask) >> 0) & ~ddr;     // 0-5 -> 0-5
+		RAM[MY_PORTA] |= ((d & d_mask) >> 3) & ~ddr;    // 3-4 -> 6-7
 	}
 	else
 	{
-		uint8_t* port = &RAM[MY_PORTB];
 		uint8_t ddr = RAM[MY_DDRB];
 		// PORTD D5 - D7
 		// PORTB D8 - D12
@@ -538,8 +544,8 @@ static void READ_PORTS(bool is_pina)
 		const uint8_t b_mask = 0b00011111;
 		const uint8_t d_mask = 0b11100000;
 		
-		*port = ((b & b_mask) << 3) & ~ddr;     // 0-4 -> 3-7
-		*port |= ((d & d_mask) >> 5) & ~ddr;    // 5-7 -> 0-2
+		RAM[MY_PORTB] = ((b & b_mask) << 3) & ~ddr;     // 0-4 -> 3-7
+		RAM[MY_PORTB] |= ((d & d_mask) >> 5) & ~ddr;    // 5-7 -> 0-2
 	}
 }
 
@@ -824,6 +830,7 @@ new_msg:
 		case 's': print_status(); break; // Status register
 		case 'g': run = true; break;     // Go (dont wait for keypress)
 		case 'p': run = false; break;    // Pause (wait for keypress)
+		case 'h': print_help(); break;   // Help
 #endif
 		case '\n': goto emulator_start;
 		}
