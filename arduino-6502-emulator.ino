@@ -1,6 +1,7 @@
 // ToDo: Split into multiple parts
 // ToDo: Split debug and no debug code
 // ToDo: Precise performance test
+// ToDo: Serial comm from emulator
 
 // ---------------------- user defined ----------------------
 //#define ROM_START	    0xFFEE		// load porta to portb
@@ -11,8 +12,6 @@
 //#define ROM_START	    0xFFDB		// A5 led test with D2 button
 
 #define RAM_END         0x0220
-
-#define CLOCK_SPEED     1000000
 
 // 1: print reg, 2: print flags, 4: print ram, 8: print instructions texts, 16: wait for enter, 32: print instuction name, 64: print instuction number
 // 128: commands throug Serial
@@ -126,9 +125,6 @@ typedef uint8_t uint4_t;
 #define MY_PB5                10
 #define MY_PB6                11
 #define MY_PB7                12
-
-const PROGMEM uint8_t pin_a[] = { MY_PA0, MY_PA1, MY_PA2, MY_PA3, MY_PA4, MY_PA5, MY_PA6, MY_PA7 };
-const PROGMEM uint8_t pin_b[] = { MY_PB0, MY_PB1, MY_PB2, MY_PB3, MY_PB4, MY_PB5, MY_PB6, MY_PB7 };
 
 #define WORD_SIZE             2
 #define VECTOR_BYTE_COUNT     (3 * WORD_SIZE)
@@ -845,7 +841,7 @@ new_msg:
 emulator_start:
 #endif
 
-op_code = read_next_byte();
+	op_code = read_next_byte();
 #if CHECK_BIT(DEBUG, 6)
 	Serial.print(F("running: "));
 	print_hex_byte(op_code);
