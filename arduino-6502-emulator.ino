@@ -4,24 +4,30 @@
 // ToDo: Serial comm from emulator
 
 // ---------------------- user defined ----------------------
-//#define ROM_START	    0xFFEE		// load porta to portb
-//#define ROM_START	    0xFFE0		// led runner with interrupt and disable
 #define ROM_START	    0xFEB1		// lcd display test
 //#define ROM_START	    0xFFCC		// timer 1 one shot test on A5
 //#define ROM_START	    0xFFA0		// timer 1 free run test
 //#define ROM_START	    0xFFDB		// A5 led test with D2 button
 
-#define RAM_END         0x0220
+#define RAM_END         0x0300
 
-// 1: print reg, 2: print flags, 4: print ram, 8: print instructions texts, 16: wait for enter, 32: print instuction name, 64: print instuction number
-// 128: commands throug Serial
+/**
+*   1: print reg
+*   2: print flags
+*   4: print ram
+*   8: print instructions texts
+*   16: wait for enter
+*   32: print instuction name
+*   64: print instuction number
+*   128: commands throug Serial
+*/
 //#define DEBUG	        ( 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 )
 //#define DEBUG	        ( 16 | 32 | 64 | 128 )
 //#define DEBUG	        ( 32 | 64 | 128 )
 //#define DEBUG	        ( 128 )
 
 //#define USE_FILE
-//#define USE_SCRIPT
+//#define USE_SCRIPT // inject.py
 
 //#define IRQB_LOW	    // interrupt continously on GND
 
@@ -108,6 +114,11 @@ typedef uint8_t uint4_t;
 #define MY_PULLUPA            (RAM_START + 0x0210)      // port A pins INPUT/INPUT_PULLUP mode
 #define MY_PULLUPB            (RAM_START + 0x0211)      // port B pins INPUT/INPUT_PULLUP mode
 
+#define MY_ACIA_DATA          (RAM_START + 0x0212)      // 
+#define MY_ACIA_STATUS        (RAM_START + 0x0213)      // 
+#define MY_ACIA_CMD           (RAM_START + 0x0214)      // 
+#define MY_ACIA_CTRL          (RAM_START + 0x0215)      // 
+
 #define MY_PA0                A0
 #define MY_PA1                A1
 #define MY_PA2                A2
@@ -189,12 +200,6 @@ uint8_t RAM_T2LL;
 	const PROGMEM uint8_t ROM_data[ROM_LENGTH] = { };
 	static_assert(sizeof(ROM_data)/sizeof(ROM_data[0]) == ROM_LENGTH, "ROM has less bytes than ROM capacity");
 #else
-	/*const PROGMEM uint8_t ROM_data[] = {	0xCE, 0x02, 0x02, 0xAD, 0x00, 0x02, 0x8D, 0x01, 0x02, 0x50, 0xF8,             // load porta to portb
-											0x00, 0x00, LOW_BYTE(ROM_START),HIGH_BYTE(ROM_START), 0x00, 0x00 };*/
-	/*const PROGMEM uint8_t ROM_data[] = {	0xCE, 0x03, 0x02, 0x1A, 0x8D, 0x00, 0x02, 0x2A, 0xD0, 0x01, 0x2A, 0xC8,       // led runner porta
-											0xF0, 0xF6, 0xD0, 0xFB, 0xA9, 0xFF, 0x8D, 0x00, 0x02, 0xE8, 0xD0, 0xFD,
-											0x40,
-											0x00, 0x00, LOW_BYTE(ROM_START),HIGH_BYTE(ROM_START), 0xF0, 0xFF };*/
 	const PROGMEM uint8_t ROM_data[] = {	0xCE, 0x03, 0x02, 0xCE, 0x02, 0x02, 0x78, 0xA9, 0x38, 0x20, 0x24, 0xFF,     // lcd test
 											0xA9, 0x06, 0x20, 0x24, 0xFF, 0xA9, 0x40, 0x20, 0x24, 0xFF, 0xBD, 0x87,
 											0xFF, 0x30, 0x06, 0x20, 0x36, 0xFF, 0xE8, 0x80, 0xF5, 0xA2, 0x00, 0xA9,
@@ -238,10 +243,6 @@ uint8_t RAM_T2LL;
 											0x04, 0x02, 0xE6, 0x00, 0xD0, 0x0A, 0xE6, 0x01, 0xD0, 0x06, 0xE6, 0x02,
 											0xD0, 0x02, 0xE6, 0x03, 0x40,
 											0x00, 0x00, LOW_BYTE(ROM_START),HIGH_BYTE(ROM_START), 0xE7, 0xFF };*/
-	/*const PROGMEM uint8_t ROM_data[] = {	0xCE, 0x03, 0x02, 0xCE, 0x02, 0x02, 0x78, 0xAD, 0x02, 0x02, 0x29, 0xFE,       // A5 led test with D2 button
-											0x8D, 0x02, 0x02, 0xAD, 0x01, 0x02, 0x2A, 0x2A, 0x2A, 0x2A, 0x2A, 0x8D,
-											0x00, 0x02, 0x80, 0xF3, 0xC8, 0x40,
-											0x00, 0x00, LOW_BYTE(ROM_START),HIGH_BYTE(ROM_START), 0xF7, 0xFF };*/
 	static_assert(sizeof(ROM_data) <= ROM_LENGTH, "ROM has less bytes than ROM capacity");
 #endif
 
@@ -705,7 +706,7 @@ static inline uint8_t    load_stack_byte()                               { retur
 static inline uint16_t   load_stack_word()                               { return load_stack_byte() | (load_stack_byte() << 8); }
 static inline void       write_stack_byte(uint8_t data)                  { RAM[STACK_START + s--] = data; }
 static inline void       write_stack_word(uint16_t data)
-{ 
+{
 	write_stack_byte(HIGH_BYTE(data));
 	write_stack_byte(LOW_BYTE(data));
 }
@@ -800,9 +801,7 @@ void irqb()
 void setup()
 {
 	set_sleep_mode(SLEEP_MODE_PWR_DOWN);
-#if DEBUG > 0
 	Serial.begin(9600);
-#endif
 	pinMode(2, INPUT_PULLUP);
 #ifdef IRQB_LOW
 	attachInterrupt(digitalPinToInterrupt(2), irqb, LOW);
