@@ -1,6 +1,9 @@
-// ToDo: Split into multiple parts
-// ToDo: Split debug and no debug code
-// ToDo: Precise performance test
+// Try out: remove tmp_word and tmp_byte, use local variables instead (more bytes maybe faster???)
+// Try out: or only tmp_word and tmp_byte (maybe faster and less bytes???)
+// Try out: remove goto-s (lot more bytes but faster)
+
+// ToDo: Split into multiple parts (move loop() out)
+// ToDo: Split debug and no debug code (easier to read)
 // ToDo: Serial comm from emulator
 
 // ---------------------- user defined ----------------------
@@ -33,12 +36,13 @@
 
 //#define VIA_SUPPORT     ( 1 | 2 | 4 )        // 1: port support, 2: timer1 support, 4: extras
 #define VIA_SUPPORT     ( 1 | 2 )        // 1: port support, 2: timer1 support, 4: extras
+//#define ACIA_SUPPORT    // serial support
 
 // ---------------------- header ----------------------
 #include <assert.h>
 #include <avr/sleep.h>
-#define VALUE(x) TO_VALUE(x)
-#define TO_VALUE(x) #x
+#define VALUE(x) _TO_VALUE(x)
+#define _TO_VALUE(x) #x
 
 #ifndef DEBUG
 #define DEBUG 0
@@ -48,17 +52,18 @@
 #define VIA_SUPPORT 0
 #endif
 
-#ifndef FAST_IO
-#define FAST_IO 0
+#ifdef ACIA_SUPPORT
+#undef ACIA_SUPPORT
+#define ACIA_SUPPORT 1
+#else
+#define ACIA_SUPPORT 0
 #endif
 
 // ---------------------- bit defines ----------------------
 
 #define BIT(nth_bit)                    (1U << (nth_bit)) //bit(nth_bit)
 #define CHECK_BIT(data, bit)            ((data) & BIT(bit)) //bitRead(data, bit)
-//#define CHECK_BIT(data, bit)            ((data) & (1UL << (bit))) //bitRead(data, bit)
 #define SET_BIT_TO(data, bit, to)       ((data) = (((data) & (~BIT(bit)))) | (((to) ? 1 : 0) << (bit))) //bitWrite(data, bit, to)
-//#define SET_BIT_TO(data, bit, to)       ((data) = (((data) & (~(1UL << (bit))))) | ((to) << (bit))) //bitWrite(data, bit, to)
 #define SET_BIT(data, bit)              ((data) |= BIT(bit)) //bitClear(data, bit)
 #define CLEAR_BIT(data, bit)            ((data) &= ~BIT(bit)) //bitSet(data, bit)
 #define CHANGE_BIT(data, bit)           ((data) ^= BIT(bit)) //bitToggle(data, bit)
@@ -159,7 +164,7 @@ static_assert(ROM_START > RAM_END, "ROM is inside of RAM");
 static_assert(ROM_LENGTH >= VECTOR_BYTE_COUNT, "ROM doesn't has enough bytes to store NMIB, RESB, IRQB vectors");
 
 // ToDo different ram sizes for different devices
-#define RAM_MAX_SIZE 1900
+#define RAM_MAX_SIZE 0x0770
 
 static_assert(RAM_LENGTH <= RAM_MAX_SIZE, "Don't have enough memory for local variables");
 
@@ -449,7 +454,7 @@ uint8_t eventFlags = 0;
 static inline uint16_t load_ram_word_dev(uint16_t address)                  { return (RAM[address + 1] << 8) | RAM[address]; }
 static inline void     write_ram_word_dev(uint16_t address, uint16_t data)  { RAM[address + 1] = HIGH_BYTE(data); RAM[address] = LOW_BYTE(data); }
 
-static inline bool ier_check(uint8_t bit) { return CHECK_BIT(RAM[MY_IER], bit) ? 1 : 0; }
+static inline bool ier_check(uint8_t bit) { return CHECK_BIT(RAM[MY_IER], bit); }
 
 static inline bool t1_is_zero() { return load_ram_word_dev(MY_T1CL) == 0; }
 static inline void t1_end_start()
@@ -690,8 +695,6 @@ static inline uint8_t    load_ram_byte(uint16_t address)                 { event
 static inline uint16_t   load_ram_word(uint16_t address)                 { return (load_ram_byte(address + 1) << 8) | load_ram_byte(address); }
 static inline uint8_t    load_any_byte(uint16_t address)                 { return (is_rom(address) ? load_rom_byte(address) : load_ram_byte(address)); }
 static inline uint16_t   load_any_word(uint16_t address)                 { return (is_rom(address) ? load_rom_word(address) : load_ram_word(address)); }
-static inline void       write_ram_byte(uint16_t address, uint8_t data)  { RAM[address] = data; events_write(address); }
-static inline void       write_any_byte(uint16_t address, uint8_t data)  { if(is_ram(address)) write_ram_byte(address, data); }
 
 static inline uint8_t    load_rom_byte()                                 { return load_rom_byte(tmp_word); }
 static inline uint16_t   load_rom_word()                                 { return load_rom_word(tmp_word); }
@@ -699,7 +702,7 @@ static inline uint8_t    load_ram_byte()                                 { retur
 static inline uint16_t   load_ram_word()                                 { return load_ram_word(tmp_word); }
 static inline uint8_t    load_any_byte()                                 { return load_any_byte(tmp_word); }
 static inline uint16_t   load_any_word()                                 { return load_any_word(tmp_word); }
-static inline void       write_ram_byte(uint8_t data)                    { write_ram_byte(tmp_word, data); }
+static inline void       write_ram_byte(uint8_t data)                    { RAM[tmp_word] = data; events_write(tmp_word); }
 static inline void       write_any_byte(uint8_t data)                    { if(is_ram()) write_ram_byte(data); }
 
 static inline uint8_t    load_stack_byte()                               { return RAM[STACK_START + ++s]; }
@@ -801,6 +804,7 @@ void irqb()
 void setup()
 {
 	set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+#if DEBUG > 0 || ACIA_SUPPORT > 0
 	Serial.begin(9600);
 	pinMode(2, INPUT_PULLUP);
 #ifdef IRQB_LOW
@@ -1801,7 +1805,7 @@ asl_lsr_ror_rol_msg:
 		goto trb_tsb_end;
 	case 0x1C:                                                          // trb abs *
 	case 0x0C:                                                          // tsb abs *
-		OP_WORD("(TSB = 0x04, TRB = 0x14) ABS");
+		OP_WORD("(TSB = 0x0C, TRB = 0x1C) ABS");
 		read_next_abs();
 	trb_tsb_end:
 		tsb_trb_bit_set(load_any_byte());
