@@ -124,6 +124,8 @@ typedef uint8_t uint4_t;
 #define MY_ACIA_CMD           (RAM_START + 0x0214)      // 
 #define MY_ACIA_CTRL          (RAM_START + 0x0215)      // 
 
+#define IRQB_PIN              2
+
 #define MY_PA0                A0
 #define MY_PA1                A1
 #define MY_PA2                A2
@@ -804,16 +806,18 @@ void irqb()
 void setup()
 {
 	set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+
 #if DEBUG > 0 || ACIA_SUPPORT > 0
 	Serial.begin(9600);
 #endif
-	pinMode(2, INPUT_PULLUP);
-#endif
+
+	pinMode(IRQB_PIN, INPUT_PULLUP);
 #ifdef IRQB_LOW
-	attachInterrupt(digitalPinToInterrupt(2), irqb, LOW);
+	attachInterrupt(digitalPinToInterrupt(IRQB_PIN), irqb, LOW);
 #else
-	attachInterrupt(digitalPinToInterrupt(2), irqb, FALLING);
+	attachInterrupt(digitalPinToInterrupt(IRQB_PIN), irqb, FALLING);
 #endif
+
 	pc = read_next_abs(); //read RESB vector
 }
 
