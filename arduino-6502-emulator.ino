@@ -806,6 +806,7 @@ void setup()
 	set_sleep_mode(SLEEP_MODE_PWR_DOWN);
 #if DEBUG > 0 || ACIA_SUPPORT > 0
 	Serial.begin(9600);
+#endif
 	pinMode(2, INPUT_PULLUP);
 #endif
 #ifdef IRQB_LOW
