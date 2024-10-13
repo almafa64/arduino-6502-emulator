@@ -779,16 +779,6 @@ static inline void eor_bit_set() { set_flags(a, Negative | Zero); }
 static inline void adc_bit_set() { set_flags(a, Negative | Zero); }
 static inline void sbc_bit_set() { set_flags(a, Negative | Zero); }
 
-#if CHECK_BIT(DEBUG, 5)
-	#if CHECK_BIT(DEBUG, 6)
-		#define OP_WORD(txt) Serial.println(F(txt")"))
-	#else
-		#define OP_WORD(txt) Serial.println(F(txt))
-	#endif
-#else
-	#define OP_WORD(txt)
-#endif
-
 // ---------------------- Runnable ----------------------
 
 void irqb()
@@ -823,10 +813,6 @@ void setup()
 
 void loop()
 {
-#if CHECK_BIT(DEBUG, 2)
-	bool do_print_ram = false;
-#endif
-
 #if CHECK_BIT(DEBUG, 4) || CHECK_BIT(DEBUG, 7)
 new_msg:
 	while(!run && !Serial.available()) {}
@@ -851,19 +837,11 @@ emulator_start:
 #endif
 
 	op_code = read_next_byte();
-#if CHECK_BIT(DEBUG, 6)
-	Serial.print(F("running: "));
-	print_hex_byte(op_code);
-#endif
-#if CHECK_BIT(DEBUG, 5) && CHECK_BIT(DEBUG, 6)
-	Serial.print(F(" ("));
-#endif
-
+	
 	cli();
 
 	switch (op_code){
 	case 0x00:                                                          // brk
-		OP_WORD("BRK");
 		//BRK does set the interrupt-disable I flag like an IRQ does, and if you have the CMOS 6502 (65C02), it will also clear the decimal D flag.
 		//Note that BRK, although it is a one-byte instruction, needs an extra byte of padding after it.
 		//This is because the return address it puts on the stack will cause the RTI to put the program counter back not to the very next byte after the BRK,
@@ -872,263 +850,149 @@ emulator_start:
 		write_stack_byte(p);
 		p = (p & (~Decimal)) | Interrupt;
 		pc = load_rom_word(BRK_IRQB);
-#if CHECK_BIT(DEBUG, 3)
-	Serial.print(F("Breaked to "));
-	print_hex_word(pc);
-	Serial.println();
-#endif
 		break;
 	case 0xDB:                                                          // stp
-		OP_WORD("STP");
-#if CHECK_BIT(DEBUG, 5)
-	delay(100);
-#endif
-#if CHECK_BIT(DEBUG, 3)
-	Serial.println(F("Please press reset to wake me up from sleep\nZZZzzz..."));
-	delay(1000);
-#endif
 		detachInterrupt(digitalPinToInterrupt(2));
 		sleep_enable();
 		sleep_cpu();
 		break;
 	case 0xCB:                                                          // wai
-		OP_WORD("WAI");
-#if CHECK_BIT(DEBUG, 5)
-	delay(100);
-#endif
 		sei();
 		sleep_enable();
 		sleep_cpu();
 		break;
 	case 0xA9:                                                          // lda #
-		OP_WORD("LDA #");
 		a = read_next_imm();
 		goto lda_end;
 	case 0xA5:                                                          // lda zp
-		OP_WORD("LDA ZP");
 		read_next_zp();
 		goto lda_mem;
 	case 0xB5:                                                          // lda zp, x
-		OP_WORD("LDA ZP, X");
 		read_next_zp_x();
 		goto lda_mem;
 	case 0xAD:                                                          // lda abs
-		OP_WORD("LDA ABS");
 		read_next_abs();
 		goto lda_mem;
 	case 0xBD:                                                          // lda abs, x
-		OP_WORD("LDA ABS, X");
 		read_next_abs_x();
 		goto lda_mem;
 	case 0xB9:                                                          // lda abs, y
-		OP_WORD("LDA ABS, Y");
 		read_next_abs_y();
 		goto lda_mem;
 	case 0xA1:                                                          // lda (zp, x)
-		OP_WORD("LDA (ZP, X)");
 		read_next_zp_idx_ind();
 		goto lda_mem;
 	case 0xB1:                                                          // lda (zp), y
-		OP_WORD("LDA (ZP), Y");
 		read_next_zp_ind_idx();
 		goto lda_mem;
 	case 0xB2:                                                          // lda (zp)    *
-		OP_WORD("LDA (ZP)");
 		read_next_zp_ind();
 	lda_mem:
 		a = load_any_byte();
 	lda_end:
 		lda_bit_set();
-#if CHECK_BIT(DEBUG, 3) > 0
-		Serial.print(F("loaded "));
-		print_hex_byte(a);
-		Serial.print(F(" into A"));
-		if(op_code != 0xA9) goto lda_ldx_ldy_msg;
-		Serial.println();
-#endif
 		break;
 	case 0xA2:                                                          // ldx #
-		OP_WORD("LDX #");
 		x = read_next_imm();
 		goto ldx_end;
 	case 0xA6:                                                          // ldx zp
-		OP_WORD("LDX ZP");
 		read_next_zp();
 		goto ldx_mem;
 	case 0xB6:                                                          // ldx zp, y
-		OP_WORD("LDX ZP, Y");
 		read_next_zp_y();
 		goto ldx_mem;
 	case 0xAE:                                                          // ldx abs
-		OP_WORD("LDX ABS");
 		read_next_abs();
 		goto ldx_mem;
 	case 0xBE:                                                          // ldx abs, y
-		OP_WORD("LDX ABS");
 		read_next_abs_y();
 	ldx_mem:
 		x = load_any_byte();
 	ldx_end:
 		ldx_bit_set();
-#if CHECK_BIT(DEBUG, 3) > 0
-		Serial.print(F("loaded "));
-		print_hex_byte(x);
-		Serial.print(F(" into X"));
-		if(op_code != 0xA2) goto lda_ldx_ldy_msg;
-		Serial.println();
-#endif
 		break;
 	case 0xA0:                                                          // ldy #
-		OP_WORD("LDY #");
 		y = read_next_imm();
 		goto ldy_end;
 	case 0xA4:                                                          // ldy zp
-		OP_WORD("LDY ZP");
 		read_next_zp();
 		goto ldy_mem;
 	case 0xB4:                                                          // ldy zp, x
-		OP_WORD("LDY ZP, X");
 		read_next_zp_x();
 		goto ldy_mem;
 	case 0xAC:                                                          // ldy abs
-		OP_WORD("LDY ABS");
 		read_next_abs();
 		goto ldy_mem;
 	case 0xBC:                                                          // ldy abs, x
-		OP_WORD("LDY ABS, X");
 		read_next_abs_x();
 	ldy_mem:
 		y = load_any_byte();
 	ldy_end:
 		ldy_bit_set();
-#if CHECK_BIT(DEBUG, 3) > 0
-		Serial.print(F("loaded "));
-		print_hex_byte(y);
-		Serial.print(F(" into Y"));
-		if(op_code != 0xA0)
-		{
-		lda_ldx_ldy_msg:
-			Serial.print(F(" from "));
-			print_hex_word(tmp_word);
-		}
-		Serial.println();
-#endif
 		break;
 	case 0x85:                                                          // sta zp
-		OP_WORD("STA ZP");
 		read_next_zp();
 		goto sta_end;
 	case 0x95:                                                          // sta zp, x
-		OP_WORD("STA ZP, X");
 		read_next_zp_x();
 		goto sta_end;
 	case 0x8D:                                                          // sta abs
-		OP_WORD("STA ABS");
 		read_next_abs();
 		goto sta_abs;
 	case 0x9D:                                                          // sta abs, x
-		OP_WORD("STA ABS, X");
 		read_next_abs_x();
 		goto sta_abs;
 	case 0x99:                                                          // sta abs, y
-		OP_WORD("STA ABS, Y");
 		read_next_abs_y();
 		goto sta_abs;
 	case 0x81:                                                          // sta (zp, x)
-		OP_WORD("STA (ZP, X)");
 		read_next_zp_idx_ind();
 		goto sta_abs;
 	case 0x91:                                                          // sta (zp), y
-		OP_WORD("STA (ZP), Y");
 		read_next_zp_ind_idx();
 		goto sta_abs;
 	case 0x92:                                                          // sta (zp)     *
-		OP_WORD("STA (ZP)");
 		read_next_zp_ind();
 	sta_abs:
 	sta_end:
 		write_any_byte(a);
-#if CHECK_BIT(DEBUG, 2) > 0
-		do_print_ram = true;
-#endif
-#if CHECK_BIT(DEBUG, 3) > 0
-		Serial.print(F("stored A ("));
-		print_hex_byte(a);
-		goto sta_stx_sty_msg;
-#endif
 		break;
 	case 0x64:                                                          // stz zp       *
-		OP_WORD("STZ ZP");
 		read_next_zp();
 		goto stz_end;
 	case 0x74:                                                          // stz zp, x    *
-		OP_WORD("STZ ZP, X");
 		read_next_zp_x();
 		goto stz_end;
 	case 0x9C:                                                          // stz abs      *
-		OP_WORD("STZ ABS");
 		read_next_abs();
 		goto stz_abs;
 	case 0x9E:                                                          // stz abs, x   *
-		OP_WORD("STZ ABS, X");
 		read_next_abs_x();
 	stz_abs:
 	stz_end:
 		write_any_byte(0);
-#if CHECK_BIT(DEBUG, 2) > 0
-		do_print_ram = true;
-#endif
-#if CHECK_BIT(DEBUG, 3) > 0
-		Serial.print(F("stored 0 (0"));
-		goto sta_stx_sty_msg;
-#endif
 		break;
 	case 0x86:                                                          // stx zp
-		OP_WORD("STX ZP");
 		read_next_zp();
 		goto stx_end;
 	case 0x96:                                                          // stx zp, y
-		OP_WORD("STX ZP, Y");
 		read_next_zp_y();
 		goto stx_end;
 	case 0x8E:                                                          // stx abs
-		OP_WORD("STX ABS");
 		if(!is_ram(read_next_abs())) break;
 	stx_end:
 		write_ram_byte(x);
-#if CHECK_BIT(DEBUG, 2) > 0
-		do_print_ram = true;
-#endif
-#if CHECK_BIT(DEBUG, 3) > 0
-		Serial.print(F("stored X ("));
-		print_hex_byte(x);
-		goto sta_stx_sty_msg;
-#endif
 		break;
 	case 0x84:                                                          // sty zp
-		OP_WORD("STY ZP");
 		read_next_zp();
 		goto sty_end;
 	case 0x94:                                                          // sty zp, x
-		OP_WORD("STY ZP, X");
 		read_next_zp_x();
 		goto sty_end;
 	case 0x8C:                                                          // sty abs
-		OP_WORD("STY ABS");
 		if(!is_ram(read_next_abs())) break;
 	sty_end:
 		write_ram_byte(y);
-#if CHECK_BIT(DEBUG, 2) > 0
-		do_print_ram = true;
-#endif
-#if CHECK_BIT(DEBUG, 3) > 0
-		Serial.print(F("stored Y ("));
-		print_hex_byte(y);
-	sta_stx_sty_msg:
-		Serial.print(F(") into "));
-		print_hex_word(tmp_word);
-		Serial.println();
-#endif
 		break;
 	case 0x0F:                                                          // bbr0 *
 	case 0x1F:                                                          // bbr1 *
@@ -1138,7 +1002,6 @@ emulator_start:
 	case 0x5F:                                                          // bbr5 *
 	case 0x6F:                                                          // bbr6 *
 	case 0x7F:                                                          // bbr7 *
-		OP_WORD("BBR");
 		if(!CHECK_BIT(load_ram_byte(read_next_zp()), op_code >> 4)) goto branch;
 		goto no_branch;
 	case 0x8F:                                                          // bbs0 *
@@ -1149,191 +1012,87 @@ emulator_start:
 	case 0xDF:                                                          // bbs5 *
 	case 0xEF:                                                          // bbs6 *
 	case 0xFF:                                                          // bbs7 *
-		OP_WORD("BBS");
 		if(CHECK_BIT(load_ram_byte(read_next_zp()), (op_code - 0x80) >> 4)) goto branch;
 		goto no_branch;
 	case 0xB0:                                                          // bcs
-		OP_WORD("BCS");
 		if(CHECK_BIT(p, CarryBit)) goto branch;
 		goto no_branch;
 	case 0x90:                                                          // bcc
-		OP_WORD("BCC");
 		if(!CHECK_BIT(p, CarryBit)) goto branch;
 		goto no_branch;
 	case 0xF0:                                                          // beq
-		OP_WORD("BEQ");
 		if(CHECK_BIT(p, ZeroBit)) goto branch;
 		goto no_branch;
 	case 0xD0:                                                          // bne
-		OP_WORD("BNE");
 		if(!CHECK_BIT(p, ZeroBit)) goto branch;
 		goto no_branch;
 	case 0x30:                                                          // bmi
-		OP_WORD("BMI");
 		if(CHECK_BIT(p, NegativeBit)) goto branch;
 		goto no_branch;
 	case 0x10:                                                          // bpl
-		OP_WORD("BPL");
 		if(!CHECK_BIT(p, NegativeBit)) goto branch;
 		goto no_branch;
 	case 0x70:                                                          // bvs
-		OP_WORD("BVS");
 		if(CHECK_BIT(p, OverflowBit)) goto branch;
 		goto no_branch;
 	case 0x50:                                                          // bvc
-		OP_WORD("BVC");
 		if(!CHECK_BIT(p, OverflowBit)) goto branch;
 	no_branch:
 		++pc;
-#if CHECK_BIT(DEBUG, 3) > 0
-		Serial.println(F("didn't branch"));
-#endif
 		break;
 	case 0x80:                                                          // bra
-		OP_WORD("BRA");
 	branch:
 		pc += static_cast<int8_t>(read_next_imm());
-#if CHECK_BIT(DEBUG, 3) > 0
-		Serial.print(F("branched to "));
-		print_hex_word(pc);
-		Serial.println();
-#endif
 		break;
 	case 0x48:                                                          // pha
-		OP_WORD("PHA");
 		write_stack_byte(a);
-#if CHECK_BIT(DEBUG, 3) > 0
-		Serial.print(F("pushed A ("));
-		print_hex_byte(a);
-		goto store_stack_msg;
-#endif
 		break;
 	case 0x08:                                                          // php
-		OP_WORD("PHP");
 		write_stack_byte(p);
-#if CHECK_BIT(DEBUG, 3) > 0
-		Serial.print(F("pushed P ("));
-		print_bin(p);
-		goto store_stack_msg;
-#endif
 		break;
 	case 0xDA:                                                          // phx *
-		OP_WORD("PHX");
 		write_stack_byte(x);
-#if CHECK_BIT(DEBUG, 3) > 0
-		Serial.print(F("pushed X ("));
-		print_hex_byte(x);
-		goto store_stack_msg;
-#endif
 		break;
 	case 0x5A:                                                          // phy *
-		OP_WORD("PHY");
 		write_stack_byte(y);
-#if CHECK_BIT(DEBUG, 3) > 0
-		Serial.print(F("pushed Y ("));
-		print_hex_byte(y);
-	store_stack_msg:
-		Serial.print(F(") into stack at S ("));
-		print_hex_byte(s + 1);
-		Serial.println(F(")"));
-#endif
 		break;
 	case 0x68:                                                          // pla
-		OP_WORD("PLA");
 		a = load_stack_byte();
 		pla_bit_set();
-#if CHECK_BIT(DEBUG, 3) > 0
-		Serial.print(F("loaded A"));
-		goto load_stack_msg;
-#endif
 		break;
 	case 0x28:                                                          // plp
-		OP_WORD("PLP");
 		p = load_stack_byte() | Break | Unused;
-#if CHECK_BIT(DEBUG, 3) > 0
-		Serial.print(F("loaded flags"));
-		goto load_stack_msg;
-#endif
 		break;
 	case 0xFA:                                                          // plx *
-		OP_WORD("PLX");
 		x = load_stack_byte();
 		plx_bit_set();
-#if CHECK_BIT(DEBUG, 3) > 0
-		Serial.print(F("loaded X"));
-		goto load_stack_msg;
-#endif
 		break;
 	case 0x7A:                                                          // ply *
-		OP_WORD("PLY");
 		y = load_stack_byte();
 		ply_bit_set();
-#if CHECK_BIT(DEBUG, 3) > 0
-		Serial.print(F("loaded Y"));
-	load_stack_msg:
-		Serial.print(F(" from stack at S ("));
-		print_hex_byte(s);
-		Serial.println(F(")"));
-#endif
 		break;
 	case 0x9A:                                                          // txs
-		OP_WORD("TXS");
 		s = x;
-#if CHECK_BIT(DEBUG, 3) > 0
-		Serial.print(F("transfered X ("));
-		print_hex_byte(x);
-		Serial.println(F(") to S"));
-#endif
 		break;
 	case 0xBA:                                                          // tsx
-		OP_WORD("TSX");
 		x = s;
 		tsx_bit_set();
-#if CHECK_BIT(DEBUG, 3) > 0
-		Serial.print(F("transfered S ("));
-		print_hex_byte(s);
-		Serial.println(F(") to X"));
-#endif
 		break;
 	case 0x8A:                                                          // txa
-		OP_WORD("TXA");
 		a = x;
 		txa_bit_set();
-#if CHECK_BIT(DEBUG, 3) > 0
-		Serial.print(F("transfered X ("));
-		print_hex_byte(x);
-		Serial.println(F(") to A"));
-#endif
 		break;
 	case 0xAA:                                                          // tax
-		OP_WORD("TAX");
 		x = a;
 		tax_bit_set();
-#if CHECK_BIT(DEBUG, 3) > 0
-		Serial.print(F("transfered A ("));
-		print_hex_byte(a);
-		Serial.println(F(") to X"));
-#endif
 		break;
 	case 0xA8:                                                          // tay
-		OP_WORD("TAY");
 		y = a;
 		tay_bit_set();
-#if CHECK_BIT(DEBUG, 3) > 0
-		Serial.print(F("transfered A ("));
-		print_hex_byte(a);
-		Serial.println(F(") to Y"));
-#endif
 		break;
 	case 0x98:                                                          // tya
-		OP_WORD("TYA");
 		a = y;
 		tya_bit_set();
-#if CHECK_BIT(DEBUG, 3) > 0
-		Serial.print(F("transfered Y ("));
-		print_hex_byte(y);
-		Serial.println(F(") to A"));
-#endif
 		break;
 	case 0x07:                                                          // rmb0 *
 	case 0x17:                                                          // rmb1 *
@@ -1343,11 +1102,7 @@ emulator_start:
 	case 0x57:                                                          // rmb5 *
 	case 0x67:                                                          // rmb6 *
 	case 0x77:                                                          // rmb7 *
-		OP_WORD("RMB");
 		if(is_ram(read_next_zp())) CLEAR_BIT(RAM[tmp_word], op_code >> 4);
-#if CHECK_BIT(DEBUG, 2) > 0
-		do_print_ram = true;
-#endif
 		break;
 	case 0x87:                                                          // smb0 *
 	case 0x97:                                                          // smb1 *
@@ -1357,223 +1112,104 @@ emulator_start:
 	case 0xD7:                                                          // smb5 *
 	case 0xE7:                                                          // smb6 *
 	case 0xF7:                                                          // smb7 *
-		OP_WORD("SMB");
 		if(is_ram(read_next_zp())) SET_BIT(RAM[tmp_word], (op_code - 0x80) >> 4);
-#if CHECK_BIT(DEBUG, 2) > 0
-		do_print_ram = true;
-#endif
 		break;
 	case 0x18:                                                          // clc
-		OP_WORD("CLC");
 		CLEAR_BIT(p, CarryBit);
 		break;
 	case 0xD8:                                                          // cld
-		OP_WORD("CLD");
 		CLEAR_BIT(p, DecimalBit);
 		break;
 	case 0x58:                                                          // cli
-		OP_WORD("CLI");
 		CLEAR_BIT(p, InterruptBit);
 		break;
 	case 0xB8:                                                          // clv
-		OP_WORD("CLV");
 		CLEAR_BIT(p, OverflowBit);
 		break;
 	case 0x38:                                                          // sec
-		OP_WORD("SEC");
 		SET_BIT(p, CarryBit);
 		break;
 	case 0xF8:                                                          // sed
-		OP_WORD("SED");
 		SET_BIT(p, DecimalBit);
 		break;
 	case 0x78:                                                          // sei
-		OP_WORD("SEI");
 		SET_BIT(p, InterruptBit);
 		break;
 	case 0x3A:                                                          // dec *
-		OP_WORD("DEC A");
 		dec_bit_set(--a);
 		break;
 	case 0xCA:                                                          // dex
-		OP_WORD("DEX");
 		dec_bit_set(--x);
 		break;
 	case 0x88:                                                          // dey
-		OP_WORD("DEY");
 		dec_bit_set(--y);
 		break;
 	case 0xC6:                                                          // dec zp
-		OP_WORD("DEC ZP");
 		read_next_zp();
 		goto dec_end;
 	case 0xD6:                                                          // dec zp, x
-		OP_WORD("DEC ZP, X");
 		read_next_zp_x();
 		goto dec_end;
 	case 0xCE:                                                          // dec abs
-		OP_WORD("DEC ABS");
 		read_next_abs();
 		goto dec_abs;
 	case 0xDE:                                                          // dec abs, x
-		OP_WORD("DEC ABS, X");
 		read_next_abs_x();
 	dec_abs:
 		if(!is_ram()) break;
 	dec_end:
 		dec_bit_set(--RAM[tmp_word]);
 		events_write(tmp_word);
-#if CHECK_BIT(DEBUG, 2) > 0
-		do_print_ram = true;
-#endif
-#if CHECK_BIT(DEBUG, 3) > 0
-		Serial.print(F("decremented "));
-		goto inc_dec_msg;
-#endif
 		break;
 	case 0x1A:                                                          // inc A *
-		OP_WORD("INC A");
 		inc_bit_set(++a);
 		break;
 	case 0xE8:                                                          // inx
-		OP_WORD("INX");
 		inc_bit_set(++x);
 		break;
 	case 0xC8:                                                          // iny
-		OP_WORD("INY");
 		inc_bit_set(++y);
 		break;
 	case 0xE6:                                                          // inc zp
-		OP_WORD("INC ZP");
 		read_next_zp();
 		goto inc_end;
 	case 0xF6:                                                          // inc zp, x
-		OP_WORD("INC ZP, X");
 		read_next_zp_x();
 		goto inc_end;
 	case 0xEE:                                                          // inc abs
-		OP_WORD("INC ABS");
 		read_next_abs();
 		goto inc_abs;
 	case 0xFE:                                                          // inc abs, x
-		OP_WORD("INC ABS, X");
 		read_next_abs_x();
 	inc_abs:
 		if(!is_ram()) break;
 	inc_end:
 		inc_bit_set(++RAM[tmp_word]);
 		events_write(tmp_word);
-#if CHECK_BIT(DEBUG, 2) > 0
-		do_print_ram = true;
-#endif
-#if CHECK_BIT(DEBUG, 3) > 0
-		Serial.print(F("incremented "));
-	inc_dec_msg:
-		print_hex_word(tmp_word);
-		Serial.println();
-#endif
 		break;
 	case 0x6C:                                                          // jmp (abs)
-		OP_WORD("JMP (ABS)");
 		tmp_word = load_any_word(read_next_abs());
 		goto jmp_jsr_end;
 	case 0x7C:                                                          // jmp (abs, x)
-		OP_WORD("JMP (ABS, X)");
 		tmp_word = load_any_word(read_next_abs_x());
 		goto jmp_jsr_end;
 	case 0x4C:                                                          // jmp abs
-		OP_WORD("JMP ABS");
 		goto jmp_jsr_read;
 	case 0x20:                                                          // jsr abs
-		OP_WORD("JSR");
 		write_stack_word(pc + 2);
 	jmp_jsr_read:
 		read_next_abs();
 	jmp_jsr_end:
 		pc = tmp_word;
-#if CHECK_BIT(DEBUG, 3) > 0
-		Serial.print(F("Jumped to "));
-		print_hex_word(pc);
-		Serial.println();
-#endif
 		break;
 	case 0x40:                                                          // rti
-		OP_WORD("RTI");
 		//https://www.masswerk.at/6502/6502_instruction_set.html#RTI
 		p = load_stack_byte() | Unused | Break;
 		goto rts_rti_end;
 	case 0x60:                                                          // rts
-		OP_WORD("RTS");
 	rts_rti_end:
 		pc = load_stack_word();
-#if CHECK_BIT(DEBUG, 3) > 0
-		Serial.print(F("Returned back to "));
-		print_hex_word(pc);
-		Serial.println();
-#endif
 		break;
-#if CHECK_BIT(DEBUG, 5) > 0
-	case 0xC9:                                                          // cmp #
-		OP_WORD("CMP #");
-		read_next_imm();
-		goto cmp_end;
-	case 0xC5:                                                          // cmp zp
-		OP_WORD("CMP ZP");
-		read_next_zp();
-		goto cmp_mem;
-	case 0xD5:                                                          // cmp zp, x
-		OP_WORD("CMP ZP, X");
-		read_next_zp_x();
-		goto cmp_mem;
-	case 0xCD:                                                          // cmp abs
-		OP_WORD("CMP ABS");
-		read_next_abs();
-		goto cmp_mem;
-	case 0xDD:                                                          // cmp abs, x
-		OP_WORD("CMP ABS, x");
-		read_next_abs_x();
-		goto cmp_mem;
-	case 0xD9:                                                          // cmp abs, y
-		OP_WORD("CMP ABS, y");
-		read_next_abs_y();
-		goto cmp_mem;
-	case 0xC1:                                                          // cmp (zp, x)
-		OP_WORD("CMP (ZP, X)");
-		read_next_zp_idx_ind();
-		goto cmp_mem;
-	case 0xD1:                                                          // cmp (zp), y
-		OP_WORD("CMP (ZP), Y");
-		read_next_zp_ind_idx();
-		goto cmp_mem;
-	case 0xD2:                                                          // cmp (zp)     *
-		OP_WORD("CMP (ZP)");
-		read_next_zp_ind();
-	cmp_mem:
-		tmp_word = load_any_byte();
-		goto cmp_end;
-	case 0xE0:                                                          // cpx #
-	case 0xC0:                                                          // cpy #
-		OP_WORD("CPX # = 0xE0, CPY #");
-		read_next_imm();
-		goto cpx_cpy_branch;
-	case 0xE4:                                                          // cpx zp
-	case 0xC4:                                                          // cpy zp
-		OP_WORD("CPX ZP = 0xE4, CPY ZP");
-		read_next_zp();
-		goto cpx_cpy_mem;
-	case 0xEC:                                                          // cpx abs
-	case 0xCC:                                                          // cpy abs
-		OP_WORD("CPX ABS = 0xEC, CPY ABS");
-		read_next_abs();
-	cpx_cpy_mem:
-		tmp_word = load_any_byte();
-	cpx_cpy_branch:
-#if CHECK_BIT(DEBUG, 3)
-	Serial.print(F("compared "));
-#endif
-		if(op_code >= 0xE0) goto cpx_end;
-		else goto cpy_end;
-#else
 	case 0xC1:                                                          // cmp (zp, x)
 	case 0xD1:                                                          // cmp (zp), y
 	case 0xD2:                                                          // cmp (zp)     *
@@ -1602,123 +1238,75 @@ emulator_start:
 		if (op_code == 0xD2 || CHECK_BIT(op_code, 0)) goto cmp_end;
 		else if(op_code >= 0xE0) goto cpx_end;
 		else goto cpy_end;
-#endif
 	cpy_end:
 		cpy_bit_set();
-#if CHECK_BIT(DEBUG, 3)
-	Serial.print(F("Y ("));
-	print_hex_byte(y);
-	goto cpx_cpy_cmp_end;
-#endif
 		break;
 	cpx_end:
 		cpx_bit_set();
-#if CHECK_BIT(DEBUG, 3)
-	Serial.print(F("X ("));
-	print_hex_byte(x);
-	goto cpx_cpy_cmp_end;
-#endif
 		break;
 	cmp_end:
 		cmp_bit_set();
-#if CHECK_BIT(DEBUG, 3)
-	Serial.print(F("A ("));
-	print_hex_byte(a);
-cpx_cpy_cmp_end:
-	Serial.print(F(") to "));
-	print_hex_byte(LOW_BYTE(tmp_word));
-	Serial.println();
-#endif
 		break;
 	case 0x0A:                                                          // asl a
-		OP_WORD("ASL A");
 		SET_BIT_TO(p, CarryBit, CHECK_BIT(a, 7));
 		asl_bit_set(a <<= 1);
 		goto asl_end;
 	case 0x06:                                                          // asl zp
-		OP_WORD("ASL ZP");
 		read_next_zp();
 		goto asl_mem;
 	case 0x16:                                                          // asl zp, x
-		OP_WORD("ASL ZP, X");
 		read_next_zp_x();
 		goto asl_mem;
 	case 0x0E:                                                          // asl abs
-		OP_WORD("ASL ABS");
 		read_next_abs();
 		goto asl_mem;
 	case 0x1E:                                                          // asl abs, x
-		OP_WORD("ASL ABS, X");
 		read_next_abs_x();
 	asl_mem:
 		if(!is_ram()) break;
 		SET_BIT_TO(p, CarryBit, CHECK_BIT(RAM[tmp_word], 7));
 		asl_bit_set((RAM[tmp_word] <<= 1));
 		events_write(tmp_word);
-#if CHECK_BIT(DEBUG, 2) > 0
-		do_print_ram = true;
-#endif
 	asl_end:
-#if CHECK_BIT(DEBUG, 3)
-	Serial.print(F("Shifted left "));
-	goto asl_lsr_ror_rol_msg;
-#endif
 		break;
 	case 0x4A:                                                          // lsr a
-		OP_WORD("LSR A");
 		SET_BIT_TO(p, CarryBit, CHECK_BIT(a, 0));
 		lsr_bit_set(a >>= 1);
 		goto lsr_end;
 	case 0x46:                                                          // lsr zp
-		OP_WORD("LSR ZP");
 		read_next_zp();
 		goto lsr_mem;
 	case 0x56:                                                          // lsr zp, x
-		OP_WORD("LSR ZP, X");
 		read_next_zp_x();
 		goto lsr_mem;
 	case 0x4E:                                                          // lsr abs
-		OP_WORD("LSR ABS");
 		read_next_abs();
 		goto lsr_mem;
 	case 0x5E:                                                          // lsr abs, x
-		OP_WORD("LSR ABS, X");
 		read_next_abs_x();
 	lsr_mem:
 		if(!is_ram()) break;
 		SET_BIT_TO(p, CarryBit, CHECK_BIT(RAM[tmp_word], 0));
 		lsr_bit_set((RAM[tmp_word] >>= 1));
 		events_write(tmp_word);
-#if CHECK_BIT(DEBUG, 2) > 0
-		do_print_ram = true;
-#endif
 	lsr_end:
-#if CHECK_BIT(DEBUG, 3)
-	Serial.print(F("Shifted right "));
-	goto asl_lsr_ror_rol_msg;
-#endif
 		break;
 	case 0x2A:                                                          // rol a
-		OP_WORD("ROL A");
 		SET_BIT_TO(p, UnusedBit, CHECK_BIT(p, CarryBit)); // XD
 		SET_BIT_TO(p, CarryBit, CHECK_BIT(a, 7));
 		a = (a << 1) | (CHECK_BIT(p, UnusedBit) >> UnusedBit);
 		rol_bit_set(a);
 		goto rol_end;
 	case 0x26:                                                          // rol zp
-		OP_WORD("ROL ZP");
 		read_next_zp();
 		goto rol_mem;
 	case 0x36:                                                          // rol zp, x
-		OP_WORD("ROL ZP, X");
 		read_next_zp_x();
 		goto rol_mem;
 	case 0x2E:                                                          // rol abs
-		OP_WORD("ROL ABS");
 		read_next_abs();
 		goto rol_mem;
 	case 0x3E:                                                          // rol abs, x
-		OP_WORD("ROL ABS, X");
 		read_next_abs_x();
 	rol_mem:
 		if(!is_ram()) break;
@@ -1726,37 +1314,25 @@ cpx_cpy_cmp_end:
 		SET_BIT_TO(p, CarryBit, CHECK_BIT(load_ram_byte(), 7));
 		write_ram_byte((load_ram_byte() << 1) | (CHECK_BIT(p, UnusedBit) >> UnusedBit));
 		rol_bit_set(load_ram_byte());
-#if CHECK_BIT(DEBUG, 2) > 0
-		do_print_ram = true;
-#endif
 	rol_end:
 		SET_BIT(p, UnusedBit);
-#if CHECK_BIT(DEBUG, 3)
-	Serial.print(F("Rotated left "));
-	goto asl_lsr_ror_rol_msg;
-#endif
 		break;
 	case 0x6A:                                                          // ror a
-		OP_WORD("ROR A");
 		SET_BIT_TO(p, UnusedBit, CHECK_BIT(p, CarryBit)); // XD
 		SET_BIT_TO(p, CarryBit, CHECK_BIT(a, 0));
 		a = (a >> 1) | (CHECK_BIT(p, UnusedBit) << (7 - UnusedBit));
 		ror_bit_set(a);
 		goto ror_end;
 	case 0x66:                                                          // ror zp
-		OP_WORD("ROR ZP");
 		read_next_zp();
 		goto ror_mem;
 	case 0x76:                                                          // ror zp, x
-		OP_WORD("ROR ZP, X");
 		read_next_zp_x();
 		goto ror_mem;
 	case 0x6E:                                                          // ror abs
-		OP_WORD("ROR ABS");
 		read_next_abs();
 		goto ror_mem;
 	case 0x7E:                                                          // ror abs, x
-		OP_WORD("ROR ABS, X");
 		read_next_abs_x();
 	ror_mem:
 		if(!is_ram()) break;
@@ -1764,40 +1340,22 @@ cpx_cpy_cmp_end:
 		SET_BIT_TO(p, CarryBit, CHECK_BIT(load_ram_byte(), 0));
 		write_ram_byte((load_ram_byte() >> 1) | (CHECK_BIT(p, UnusedBit) << (7 - UnusedBit)));
 		ror_bit_set(load_ram_byte());
-#if CHECK_BIT(DEBUG, 2) > 0
-		do_print_ram = true;
-#endif
 	ror_end:
 		SET_BIT(p, UnusedBit);
-#if CHECK_BIT(DEBUG, 3)
-	Serial.print(F("Rotated right "));
-asl_lsr_ror_rol_msg:
-	if(LOW_NIBBLE(op_code) == 0xA) Serial.println(F("A"));
-	else 
-	{ 
-		print_hex_byte(tmp_word);
-		Serial.println();
-	}
-#endif
 		break;
 	case 0x89:                                                          // bit # *
-		OP_WORD("BIT #");
 		read_next_imm();
 		goto bit_end;
 	case 0x24:                                                          // bit zp
-		OP_WORD("BIT ZP");
 		read_next_zp();
 		goto bit_mem;
 	case 0x34:                                                          // bit zp, x *
-		OP_WORD("BIT ZP, X");
 		read_next_zp_x();
 		goto bit_mem;
 	case 0x2C:                                                          // bit abs
-		OP_WORD("BIT ABS");
 		read_next_abs();
 		goto bit_mem;
 	case 0x3C:                                                          // bit abs, x *
-		OP_WORD("BIT ABS, X");
 		read_next_abs_x();
 	bit_mem:
 		tmp_word = load_any_byte();
@@ -1806,196 +1364,136 @@ asl_lsr_ror_rol_msg:
 		break;
 	case 0x14:                                                          // trb zp *
 	case 0x04:                                                          // tsb zp *
-		OP_WORD("(TSB = 0x04, TRB = 0x14) ZP");
 		read_next_zp();
 		goto trb_tsb_end;
 	case 0x1C:                                                          // trb abs *
 	case 0x0C:                                                          // tsb abs *
-		OP_WORD("(TSB = 0x0C, TRB = 0x1C) ABS");
 		read_next_abs();
 	trb_tsb_end:
 		tsb_trb_bit_set(load_any_byte());
 		write_any_byte((op_code > 0x10) ? ((~a) & load_ram_byte()) : (a | load_ram_byte()));
-#if CHECK_BIT(DEBUG, 2)
-	do_print_ram = true;
-#endif
 		break;
 	case 0x29:                                                          // and #
-		OP_WORD("AND #");
 		read_next_imm();
 		goto and_end;
 	case 0x25:                                                          // and zp
-		OP_WORD("AND ZP");
 		read_next_zp();
 		goto and_mem;
 	case 0x35:                                                          // and zp, x
-		OP_WORD("AND ZP, X");
 		read_next_zp_x();
 		goto and_mem;
 	case 0x2D:                                                          // and abs
-		OP_WORD("AND ABS");
 		read_next_abs();
 		goto and_mem;
 	case 0x3D:                                                          // and abs, x
-		OP_WORD("AND ABS, X");
 		read_next_abs_x();
 		goto and_mem;
 	case 0x39:                                                          // and abs, y
-		OP_WORD("AND ABS, Y");
 		read_next_abs_y();
 		goto and_mem;
 	case 0x21:                                                          // and (zp, x)
-		OP_WORD("AND (ZP, X)");
 		read_next_zp_idx_ind();
 		goto and_mem;
 	case 0x31:                                                          // and (zp), y
-		OP_WORD("AND (ZP), Y");
 		read_next_zp_ind_idx();
 		goto and_mem;
 	case 0x32:                                                          // and (zp)    *
-		OP_WORD("AND (ZP)");
 		read_next_zp_ind();
 	and_mem:
 		tmp_word = load_any_byte();
 	and_end:
 		a &= tmp_word;
 		and_bit_set();
-#if CHECK_BIT(DEBUG, 3)
-	Serial.print(F("AND-ed A ("));
-	print_hex_byte((~a) ^ LOW_BYTE(tmp_word));
-	goto and_eor_ora_msg;
-#endif
 		break;
 	case 0x49:                                                          // eor #
-		OP_WORD("EOR #");
 		a ^= read_next_imm();
 		goto eor_end;
 	case 0x45:                                                          // eor zp
-		OP_WORD("EOR ZP");
 		read_next_zp();
 		goto eor_mem;
 	case 0x55:                                                          // eor zp, x
-		OP_WORD("EOR ZP, X");
 		read_next_zp_x();
 		goto eor_mem;
 	case 0x4D:                                                          // eor abs
-		OP_WORD("EOR ABS");
 		read_next_abs();
 		goto eor_mem;
 	case 0x5D:                                                          // eor abs, x
-		OP_WORD("EOR ABS, X");
 		read_next_abs_x();
 		goto eor_mem;
 	case 0x59:                                                          // eor abs, y
-		OP_WORD("EOR ABS, Y");
 		read_next_abs_y();
 		goto eor_mem;
 	case 0x41:                                                          // eor (zp, x)
-		OP_WORD("EOR (ZP, X)");
 		read_next_zp_idx_ind();
 		goto eor_mem;
 	case 0x51:                                                          // eor (zp), y
-		OP_WORD("EOR (ZP), Y");
 		read_next_zp_ind_idx();
 		goto eor_mem;
 	case 0x52:                                                          // eor (zp)    *
-		OP_WORD("EOR (ZP)");
 		read_next_zp_ind();
 	eor_mem:
 		tmp_word = load_any_byte();
 		a ^= tmp_word;
 	eor_end:
 		eor_bit_set();
-#if CHECK_BIT(DEBUG, 3)
-	Serial.print(F("XOR-ed A ("));
-	print_hex_byte(a ^ LOW_BYTE(tmp_word));
-	goto and_eor_ora_msg;
-#endif
 		break;
 	case 0x09:                                                          // ora #
-		OP_WORD("ORA #");
 		read_next_imm();
 		goto ora_end;
 	case 0x05:                                                          // ora zp
-		OP_WORD("ORA ZP");
 		read_next_zp();
 		goto ora_mem;
 	case 0x15:                                                          // ora zp, x
-		OP_WORD("ORA ZP, X");
 		read_next_zp_x();
 		goto ora_mem;
 	case 0x0D:                                                          // ora abs
-		OP_WORD("ORA ABS");
 		read_next_abs();
 		goto ora_mem;
 	case 0x1D:                                                          // ora abs, x
-		OP_WORD("ORA ABS, X");
 		read_next_abs_x();
 		goto ora_mem;
 	case 0x19:                                                          // ora abs, y
-		OP_WORD("ORA ABS, Y");
 		read_next_abs_y();
 		goto ora_mem;
 	case 0x11:                                                          // ora (zp), y
-		OP_WORD("ORA (ZP, X)");
 		read_next_zp_idx_ind();
 		goto ora_mem;
 	case 0x01:                                                          // ora (zp, x)
-		OP_WORD("ORA (ZP), Y");
 		read_next_zp_ind_idx();
 		goto ora_mem;
 	case 0x12:                                                          // ora (zp)    *
-		OP_WORD("ORA (ZP)");
 		read_next_zp_ind();
 	ora_mem:
 		tmp_word = load_any_byte();
 	ora_end:
-#if CHECK_BIT(DEBUG, 3)
-	Serial.print(F("OR-ed A ("));
-	print_hex_byte(a);
-	and_eor_ora_msg:
-	Serial.print(F(") with "));
-	print_hex_byte(LOW_BYTE(tmp_word));
-	Serial.println();
-	if(op_code > 0x1F) break;
-#endif
 		a |= tmp_word;
 		ora_bit_set();
 		break;
 	case 0x69:                                                          // adc #
-		OP_WORD("ADC #");
 		read_next_imm();
 		goto adc_end;
 	case 0x65:                                                          // adc zp
-		OP_WORD("ADC ZP");
 		read_next_zp();
 		goto adc_mem;
 	case 0x75:                                                          // adc zp, x
-		OP_WORD("ADC ZP, X");
 		read_next_zp_x();
 		goto adc_mem;
 	case 0x6D:                                                          // adc abs
-		OP_WORD("ADC ABS");
 		read_next_abs();
 		goto adc_mem;
 	case 0x7D:                                                          // adc abs, x
-		OP_WORD("ADC ABS, X");
 		read_next_abs_x();
 		goto adc_mem;
 	case 0x79:                                                          // adc abs, y
-		OP_WORD("ADC ABS, Y");
 		read_next_abs_y();
 		goto adc_mem;
 	case 0x61:                                                          // adc (zp, x)
-		OP_WORD("ADC (ZP, X)");
 		read_next_zp_idx_ind();
 		goto adc_mem;
 	case 0x71:                                                          // adc (zp), y
-		OP_WORD("ADC (ZP), Y");
 		read_next_zp_ind_idx();
 		goto adc_mem;
 	case 0x72:                                                          // adc (zp)    *
-		OP_WORD("ADC (ZP)");
 		read_next_zp_ind();
 	adc_mem:
 		tmp_word = load_any_byte();
@@ -2021,48 +1519,32 @@ asl_lsr_ror_rol_msg:
 		SET_BIT_TO(p, OverflowBit, !CHECK_BIT(tmp_word ^ a, 7) && CHECK_BIT(tmp_word ^ tmp_byte, 7)); //(M^result)&(N^result)&0x80 , !((M^N) & 0x80) && ((M^result) & 0x80)
 		a = tmp_byte;
 		adc_bit_set();
-#if CHECK_BIT(DEBUG, 3)
-	Serial.print(F("Added"));
-	print_hex_byte(LOW_BYTE(tmp_word));
-	Serial.print(F("to A ("));
-	print_hex_byte(a);
-	Serial.println(')');
-#endif
 		break;
 	case 0xE9:                                                          // sbc #
-		OP_WORD("SBC #");
 		read_next_imm();
 		goto sbc_end;
 	case 0xE5:                                                          // sbc zp
-		OP_WORD("SBC ZP");
 		read_next_zp();
 		goto sbc_mem;
 	case 0xF5:                                                          // sbc zp, x
-		OP_WORD("SBC ZP, X");
 		read_next_zp_x();
 		goto sbc_mem;
 	case 0xED:                                                          // sbc abs
-		OP_WORD("SBC ABS");
 		read_next_abs();
 		goto sbc_mem;
 	case 0xFD:                                                          // sbc abs, x
-		OP_WORD("SBC ABS, X");
 		read_next_abs_x();
 		goto sbc_mem;
 	case 0xF9:                                                          // sbc abs, y
-		OP_WORD("SBC ABS, Y");
 		read_next_abs_y();
 		goto sbc_mem;
 	case 0xF1:                                                          // sbc (zp), y
-		OP_WORD("SBC (ZP, X)");
 		read_next_zp_idx_ind();
 		goto sbc_mem;
 	case 0xE1:                                                          // sbc (zp, x)
-		OP_WORD("SBC (ZP), Y");
 		read_next_zp_ind_idx();
 		goto sbc_mem;
 	case 0xF2:                                                          // sbc (zp)    *
-		OP_WORD("SBC (ZP)");
 		read_next_zp_ind();
 	sbc_mem:
 		tmp_word = load_any_byte();
@@ -2088,16 +1570,8 @@ asl_lsr_ror_rol_msg:
 		SET_BIT_TO(p, OverflowBit, CHECK_BIT(tmp_word ^ a, 7) && !CHECK_BIT(tmp_word ^ tmp_byte, 7)); //(M^result)&(N^result)&0x80 , !((M^N) & 0x80) && ((M^result) & 0x80)
 		a = tmp_byte;
 		sbc_bit_set();
-#if CHECK_BIT(DEBUG, 3)
-	Serial.print(F("Subbed"));
-	print_hex_byte(LOW_BYTE(tmp_word));
-	Serial.print(F("from A ("));
-	print_hex_byte(a);
-	Serial.println(')');
-#endif
 		break;
 	default:                                                          // nop
-		OP_WORD("UNSPECIFIED / NOP");
 		break;
 	}
 	
@@ -2186,14 +1660,4 @@ asl_lsr_ror_rol_msg:
 #endif
 	SET_BIT_TO(RAM[MY_IFR], IFR_IRQ_Bit, RAM[MY_IFR] & (RAM[MY_IER] & 0b01111111));
 #endif
-
-	#if CHECK_BIT(DEBUG, 0)
-		print_status();
-	#endif
-	#if CHECK_BIT(DEBUG, 1)
-		print_reg();
-	#endif
-	#if CHECK_BIT(DEBUG, 2)
-		if(do_print_ram) print_ram();
-	#endif
 }
