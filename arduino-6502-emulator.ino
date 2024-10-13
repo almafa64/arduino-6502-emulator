@@ -1,6 +1,3 @@
-// !!!!! Remove tmp_byte/tmp_word !!!!!
-// !!!!! Remove replace goto with #define or function !!!!!
-
 // Try out: remove tmp_word and tmp_byte, use local variables instead (more bytes maybe faster???)
 // Try out: or only tmp_word and tmp_byte (maybe faster and less bytes???)
 // Try out: remove goto-s (lot more bytes but faster)
@@ -10,8 +7,8 @@
 // ToDo: Serial comm from emulator
 
 // ---------------------- user defined ----------------------
-//#define ROM_START	    0xFEB1		// lcd display test
-#define ROM_START	    0xFFCC		// timer 1 one shot test on A5
+#define ROM_START	    0xFEB1		// lcd display test
+//#define ROM_START	    0xFFCC		// timer 1 one shot test on A5
 //#define ROM_START	    0xFFA0		// timer 1 free run test
 //#define ROM_START	    0xFFDB		// A5 led test with D2 button
 
@@ -30,7 +27,7 @@
 //#define DEBUG	        ( 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 )
 //#define DEBUG	        ( 16 | 32 | 64 | 128 )
 //#define DEBUG	        ( 32 | 64 | 128 )
-#define DEBUG	        ( 128 )
+//#define DEBUG	        ( 128 )
 
 //#define USE_FILE
 //#define USE_SCRIPT // inject.py
@@ -210,7 +207,7 @@ uint8_t RAM_T2LL;
 	const PROGMEM uint8_t ROM_data[ROM_LENGTH] = { };
 	static_assert(sizeof(ROM_data)/sizeof(ROM_data[0]) == ROM_LENGTH, "ROM has less bytes than ROM capacity");
 #else
-	/*const PROGMEM uint8_t ROM_data[] = {	0xCE, 0x03, 0x02, 0xCE, 0x02, 0x02, 0x78, 0xA9, 0x38, 0x20, 0x24, 0xFF,     // lcd test
+	const PROGMEM uint8_t ROM_data[] = {	0xCE, 0x03, 0x02, 0xCE, 0x02, 0x02, 0x78, 0xA9, 0x38, 0x20, 0x24, 0xFF,     // lcd test
 											0xA9, 0x06, 0x20, 0x24, 0xFF, 0xA9, 0x40, 0x20, 0x24, 0xFF, 0xBD, 0x87,
 											0xFF, 0x30, 0x06, 0x20, 0x36, 0xFF, 0xE8, 0x80, 0xF5, 0xA2, 0x00, 0xA9,
 											0x0E, 0x20, 0x24, 0xFF, 0xA9, 0x01, 0x20, 0x24, 0xFF, 0xBD, 0x4E, 0xFF,
@@ -238,12 +235,12 @@ uint8_t RAM_T2LL;
 											0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x41,
 											0x5A, 0x54, 0x20, 0x41, 0x20, 0x47, 0x4F, 0x4D, 0x42, 0x4F, 0x54, 0x21,
 											0x21, 0x21, 0x21, 0x00,
-											0x00, 0x00, LOW_BYTE(ROM_START),HIGH_BYTE(ROM_START), 0x4C, 0xFF };*/
-	const PROGMEM uint8_t ROM_data[] = {	0xCE, 0x03, 0x02, 0x9C, 0x00, 0x02, 0x9C, 0x0B, 0x02, 0xA2, 0x20, 0x8E,       // timer 1 one shot test
+											0x00, 0x00, LOW_BYTE(ROM_START),HIGH_BYTE(ROM_START), 0x4C, 0xFF };
+	/*const PROGMEM uint8_t ROM_data[] = {	0xCE, 0x03, 0x02, 0x9C, 0x00, 0x02, 0x9C, 0x0B, 0x02, 0xA2, 0x20, 0x8E,       // timer 1 one shot test
 											0x00, 0x02, 0x20, 0xE5, 0xFF, 0x9C, 0x00, 0x02, 0x20, 0xE5, 0xFF, 0x80,
 											0xF2, 0xA9, 0x50, 0x8D, 0x04, 0x02, 0xA9, 0xC3, 0x8D, 0x05, 0x02, 0x2C,
 											0x0D, 0x02, 0x50, 0xFB, 0xAD, 0x04, 0x02, 0x60, 0x40,
-											0x00, 0x00, LOW_BYTE(ROM_START),HIGH_BYTE(ROM_START), 0xF8, 0xFF };
+											0x00, 0x00, LOW_BYTE(ROM_START),HIGH_BYTE(ROM_START), 0xF8, 0xFF };*/
 	/*const PROGMEM uint8_t ROM_data[] = {	0xCE, 0x02, 0x02, 0x9C, 0x01, 0x02, 0x9C, 0x0B, 0x02, 0x64, 0x04, 0x20,       // timer 1 free run test
 											0xC9, 0xFF, 0x20, 0xB3, 0xFF, 0x80, 0xFB, 0x38, 0xA5, 0x00, 0xE5, 0x04,
 											0xC9, 0x19, 0x90, 0x0C, 0xA9, 0x01, 0x4D, 0x01, 0x02, 0x8D, 0x01, 0x02,
@@ -1005,8 +1002,7 @@ emulator_start:
 	case 0x5F:                                                          // bbr5 *
 	case 0x6F:                                                          // bbr6 *
 	case 0x7F:                                                          // bbr7 *
-		if(!CHECK_BIT(load_ram_byte(read_next_zp()), HIGH_NIBBLE(op_code)))
-			goto branch;
+		if(!CHECK_BIT(load_ram_byte(read_next_zp()), op_code >> 4)) goto branch;
 		goto no_branch;
 	case 0x8F:                                                          // bbs0 *
 	case 0x9F:                                                          // bbs1 *
@@ -1016,8 +1012,7 @@ emulator_start:
 	case 0xDF:                                                          // bbs5 *
 	case 0xEF:                                                          // bbs6 *
 	case 0xFF:                                                          // bbs7 *
-		if(CHECK_BIT(load_ram_byte(read_next_zp()), HIGH_NIBBLE(op_code - 0x80)))
-			goto branch;
+		if(CHECK_BIT(load_ram_byte(read_next_zp()), (op_code - 0x80) >> 4)) goto branch;
 		goto no_branch;
 	case 0xB0:                                                          // bcs
 		if(CHECK_BIT(p, CarryBit)) goto branch;
@@ -1107,8 +1102,7 @@ emulator_start:
 	case 0x57:                                                          // rmb5 *
 	case 0x67:                                                          // rmb6 *
 	case 0x77:                                                          // rmb7 *
-		if(is_ram(read_next_zp()))
-			CLEAR_BIT(RAM[tmp_word], HIGH_NIBBLE(op_code));
+		if(is_ram(read_next_zp())) CLEAR_BIT(RAM[tmp_word], op_code >> 4);
 		break;
 	case 0x87:                                                          // smb0 *
 	case 0x97:                                                          // smb1 *
@@ -1118,8 +1112,7 @@ emulator_start:
 	case 0xD7:                                                          // smb5 *
 	case 0xE7:                                                          // smb6 *
 	case 0xF7:                                                          // smb7 *
-		if(is_ram(read_next_zp()))
-			SET_BIT(RAM[tmp_word], HIGH_NIBBLE(op_code - 0x80));
+		if(is_ram(read_next_zp())) SET_BIT(RAM[tmp_word], (op_code - 0x80) >> 4);
 		break;
 	case 0x18:                                                          // clc
 		CLEAR_BIT(p, CarryBit);
