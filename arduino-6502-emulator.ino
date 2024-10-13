@@ -807,6 +807,7 @@ void setup()
 #if DEBUG > 0 || ACIA_SUPPORT > 0
 	Serial.begin(9600);
 	pinMode(2, INPUT_PULLUP);
+#endif
 #ifdef IRQB_LOW
 	attachInterrupt(digitalPinToInterrupt(2), irqb, LOW);
 #else
