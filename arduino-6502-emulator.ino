@@ -1,5 +1,6 @@
 // !!!!! Remove tmp_byte/tmp_word !!!!!
 // !!!!! Remove replace goto with #define or function !!!!!
+// !!!!! replace RAM[tmp_word] with load_any_byte() !!!!!
 
 // Try out: remove tmp_word and tmp_byte, use local variables instead (more bytes maybe faster???)
 // Try out: or only tmp_word and tmp_byte (maybe faster and less bytes???)
@@ -866,136 +867,167 @@ emulator_start:
 		break;
 	case 0xA9:                                                          // lda #
 		a = read_next_imm();
-		goto lda_end;
+		lda_bit_set();
+		break;
 	case 0xA5:                                                          // lda zp
 		read_next_zp();
-		goto lda_mem;
+		a = load_ram_byte();
+		lda_bit_set();
+		break;
 	case 0xB5:                                                          // lda zp, x
 		read_next_zp_x();
-		goto lda_mem;
+		a = load_any_byte();
+		lda_bit_set();
+		break;
 	case 0xAD:                                                          // lda abs
 		read_next_abs();
-		goto lda_mem;
+		a = load_any_byte();
+		lda_bit_set();
+		break;
 	case 0xBD:                                                          // lda abs, x
 		read_next_abs_x();
-		goto lda_mem;
+		a = load_any_byte();
+		lda_bit_set();
+		break;
 	case 0xB9:                                                          // lda abs, y
 		read_next_abs_y();
-		goto lda_mem;
+		a = load_any_byte();
+		lda_bit_set();
+		break;
 	case 0xA1:                                                          // lda (zp, x)
 		read_next_zp_idx_ind();
-		goto lda_mem;
+		a = load_any_byte();
+		lda_bit_set();
+		break;
 	case 0xB1:                                                          // lda (zp), y
 		read_next_zp_ind_idx();
-		goto lda_mem;
+		a = load_any_byte();
+		lda_bit_set();
+		break;
 	case 0xB2:                                                          // lda (zp)    *
 		read_next_zp_ind();
-	lda_mem:
 		a = load_any_byte();
-	lda_end:
 		lda_bit_set();
 		break;
 	case 0xA2:                                                          // ldx #
 		x = read_next_imm();
-		goto ldx_end;
+		ldx_bit_set();
+		break;
 	case 0xA6:                                                          // ldx zp
 		read_next_zp();
-		goto ldx_mem;
+		x = load_ram_byte();
+		ldx_bit_set();
+		break;
 	case 0xB6:                                                          // ldx zp, y
 		read_next_zp_y();
-		goto ldx_mem;
+		x = load_any_byte();
+		ldx_bit_set();
+		break;
 	case 0xAE:                                                          // ldx abs
 		read_next_abs();
-		goto ldx_mem;
+		x = load_any_byte();
+		ldx_bit_set();
+		break;
 	case 0xBE:                                                          // ldx abs, y
 		read_next_abs_y();
-	ldx_mem:
 		x = load_any_byte();
-	ldx_end:
 		ldx_bit_set();
 		break;
 	case 0xA0:                                                          // ldy #
 		y = read_next_imm();
-		goto ldy_end;
+		ldy_bit_set();
+		break;
 	case 0xA4:                                                          // ldy zp
 		read_next_zp();
-		goto ldy_mem;
+		y = load_ram_byte();
+		ldy_bit_set();
+		break;
 	case 0xB4:                                                          // ldy zp, x
 		read_next_zp_x();
-		goto ldy_mem;
+		y = load_any_byte();
+		ldy_bit_set();
+		break;
 	case 0xAC:                                                          // ldy abs
 		read_next_abs();
-		goto ldy_mem;
+		y = load_any_byte();
+		ldy_bit_set();
+		break;
 	case 0xBC:                                                          // ldy abs, x
 		read_next_abs_x();
-	ldy_mem:
 		y = load_any_byte();
-	ldy_end:
 		ldy_bit_set();
 		break;
 	case 0x85:                                                          // sta zp
 		read_next_zp();
-		goto sta_end;
+		write_ram_byte(a);
+		break;
 	case 0x95:                                                          // sta zp, x
 		read_next_zp_x();
-		goto sta_end;
+		write_ram_byte(a);
+		break;
 	case 0x8D:                                                          // sta abs
 		read_next_abs();
-		goto sta_abs;
+		write_any_byte(a);
+		break;
 	case 0x9D:                                                          // sta abs, x
 		read_next_abs_x();
-		goto sta_abs;
+		write_any_byte(a);
+		break;
 	case 0x99:                                                          // sta abs, y
 		read_next_abs_y();
-		goto sta_abs;
+		write_any_byte(a);
+		break;
 	case 0x81:                                                          // sta (zp, x)
 		read_next_zp_idx_ind();
-		goto sta_abs;
+		write_any_byte(a);
+		break;
 	case 0x91:                                                          // sta (zp), y
 		read_next_zp_ind_idx();
-		goto sta_abs;
+		write_any_byte(a);
+		break;
 	case 0x92:                                                          // sta (zp)     *
 		read_next_zp_ind();
-	sta_abs:
-	sta_end:
 		write_any_byte(a);
 		break;
 	case 0x64:                                                          // stz zp       *
 		read_next_zp();
-		goto stz_end;
+		write_any_byte(0);
+		break;
 	case 0x74:                                                          // stz zp, x    *
 		read_next_zp_x();
-		goto stz_end;
+		write_ram_byte(0);
+		break;
 	case 0x9C:                                                          // stz abs      *
 		read_next_abs();
-		goto stz_abs;
+		write_any_byte(0);
+		break;
 	case 0x9E:                                                          // stz abs, x   *
 		read_next_abs_x();
-	stz_abs:
-	stz_end:
 		write_any_byte(0);
 		break;
 	case 0x86:                                                          // stx zp
 		read_next_zp();
-		goto stx_end;
+		write_ram_byte(x);
+		break;
 	case 0x96:                                                          // stx zp, y
 		read_next_zp_y();
-		goto stx_end;
+		write_any_byte(x);
+		break;
 	case 0x8E:                                                          // stx abs
-		if(!is_ram(read_next_abs())) break;
-	stx_end:
-		write_ram_byte(x);
+		read_next_abs();
+		write_any_byte(x);
 		break;
 	case 0x84:                                                          // sty zp
 		read_next_zp();
-		goto sty_end;
+		write_ram_byte(y);
+		break;
 	case 0x94:                                                          // sty zp, x
 		read_next_zp_x();
-		goto sty_end;
-	case 0x8C:                                                          // sty abs
-		if(!is_ram(read_next_abs())) break;
-	sty_end:
 		write_ram_byte(y);
+		break;
+	case 0x8C:                                                          // sty abs
+		read_next_abs();
+		write_any_byte(y);
 		break;
 	case 0x0F:                                                          // bbr0 *
 	case 0x1F:                                                          // bbr1 *
@@ -1006,8 +1038,10 @@ emulator_start:
 	case 0x6F:                                                          // bbr6 *
 	case 0x7F:                                                          // bbr7 *
 		if(!CHECK_BIT(load_ram_byte(read_next_zp()), HIGH_NIBBLE(op_code)))
-			goto branch;
-		goto no_branch;
+			pc += static_cast<int8_t>(read_next_imm());
+		else
+			++pc;
+		break;
 	case 0x8F:                                                          // bbs0 *
 	case 0x9F:                                                          // bbs1 *
 	case 0xAF:                                                          // bbs2 *
@@ -1017,36 +1051,59 @@ emulator_start:
 	case 0xEF:                                                          // bbs6 *
 	case 0xFF:                                                          // bbs7 *
 		if(CHECK_BIT(load_ram_byte(read_next_zp()), HIGH_NIBBLE(op_code - 0x80)))
-			goto branch;
-		goto no_branch;
+			pc += static_cast<int8_t>(read_next_imm());
+		else
+			++pc;
+		break;
 	case 0xB0:                                                          // bcs
-		if(CHECK_BIT(p, CarryBit)) goto branch;
-		goto no_branch;
+		if(CHECK_BIT(p, CarryBit)) 
+			pc += static_cast<int8_t>(read_next_imm());
+		else
+			++pc;
+		break;
 	case 0x90:                                                          // bcc
-		if(!CHECK_BIT(p, CarryBit)) goto branch;
-		goto no_branch;
+		if(!CHECK_BIT(p, CarryBit)) 
+			pc += static_cast<int8_t>(read_next_imm());
+		else
+			++pc;
+		break;
 	case 0xF0:                                                          // beq
-		if(CHECK_BIT(p, ZeroBit)) goto branch;
-		goto no_branch;
+		if(CHECK_BIT(p, ZeroBit)) 
+			pc += static_cast<int8_t>(read_next_imm());
+		else
+			++pc;
+		break;
 	case 0xD0:                                                          // bne
-		if(!CHECK_BIT(p, ZeroBit)) goto branch;
-		goto no_branch;
+		if(!CHECK_BIT(p, ZeroBit)) 
+			pc += static_cast<int8_t>(read_next_imm());
+		else
+			++pc;
+		break;
 	case 0x30:                                                          // bmi
-		if(CHECK_BIT(p, NegativeBit)) goto branch;
-		goto no_branch;
+		if(CHECK_BIT(p, NegativeBit)) 
+			pc += static_cast<int8_t>(read_next_imm());
+		else
+			++pc;
+		break;
 	case 0x10:                                                          // bpl
-		if(!CHECK_BIT(p, NegativeBit)) goto branch;
-		goto no_branch;
+		if(!CHECK_BIT(p, NegativeBit)) 
+			pc += static_cast<int8_t>(read_next_imm());
+		else
+			++pc;
+		break;
 	case 0x70:                                                          // bvs
-		if(CHECK_BIT(p, OverflowBit)) goto branch;
-		goto no_branch;
+		if(CHECK_BIT(p, OverflowBit)) 
+			pc += static_cast<int8_t>(read_next_imm());
+		else
+			++pc;
+		break;
 	case 0x50:                                                          // bvc
-		if(!CHECK_BIT(p, OverflowBit)) goto branch;
-	no_branch:
-		++pc;
+		if(!CHECK_BIT(p, OverflowBit))
+			pc += static_cast<int8_t>(read_next_imm());
+		else
+			++pc;
 		break;
 	case 0x80:                                                          // bra
-	branch:
 		pc += static_cast<int8_t>(read_next_imm());
 		break;
 	case 0x48:                                                          // pha
@@ -1153,18 +1210,23 @@ emulator_start:
 		break;
 	case 0xC6:                                                          // dec zp
 		read_next_zp();
-		goto dec_end;
+		dec_bit_set(--RAM[tmp_word]);
+		events_write(tmp_word);
+		break;
 	case 0xD6:                                                          // dec zp, x
 		read_next_zp_x();
-		goto dec_end;
+		dec_bit_set(--RAM[tmp_word]);
+		events_write(tmp_word);
+		break;
 	case 0xCE:                                                          // dec abs
 		read_next_abs();
-		goto dec_abs;
+		if(!is_ram()) break;
+		dec_bit_set(--RAM[tmp_word]);
+		events_write(tmp_word);
+		break;
 	case 0xDE:                                                          // dec abs, x
 		read_next_abs_x();
-	dec_abs:
 		if(!is_ram()) break;
-	dec_end:
 		dec_bit_set(--RAM[tmp_word]);
 		events_write(tmp_word);
 		break;
@@ -1179,42 +1241,44 @@ emulator_start:
 		break;
 	case 0xE6:                                                          // inc zp
 		read_next_zp();
-		goto inc_end;
+		inc_bit_set(++RAM[tmp_word]);
+		events_write(tmp_word);
+		break;
 	case 0xF6:                                                          // inc zp, x
 		read_next_zp_x();
-		goto inc_end;
+		inc_bit_set(++RAM[tmp_word]);
+		events_write(tmp_word);
+		break;
 	case 0xEE:                                                          // inc abs
 		read_next_abs();
-		goto inc_abs;
+		if(!is_ram()) break;
+		inc_bit_set(++RAM[tmp_word]);
+		events_write(tmp_word);
+		break;
 	case 0xFE:                                                          // inc abs, x
 		read_next_abs_x();
-	inc_abs:
 		if(!is_ram()) break;
-	inc_end:
 		inc_bit_set(++RAM[tmp_word]);
 		events_write(tmp_word);
 		break;
 	case 0x6C:                                                          // jmp (abs)
 		tmp_word = load_any_word(read_next_abs());
-		goto jmp_jsr_end;
+		pc = tmp_word;
+		break;
 	case 0x7C:                                                          // jmp (abs, x)
 		tmp_word = load_any_word(read_next_abs_x());
-		goto jmp_jsr_end;
-	case 0x4C:                                                          // jmp abs
-		goto jmp_jsr_read;
+		pc = tmp_word;
+		break;
 	case 0x20:                                                          // jsr abs
 		write_stack_word(pc + 2);
-	jmp_jsr_read:
+	case 0x4C:                                                          // jmp abs
 		read_next_abs();
-	jmp_jsr_end:
 		pc = tmp_word;
 		break;
 	case 0x40:                                                          // rti
 		//https://www.masswerk.at/6502/6502_instruction_set.html#RTI
 		p = load_stack_byte() | Unused | Break;
-		goto rts_rti_end;
 	case 0x60:                                                          // rts
-	rts_rti_end:
 		pc = load_stack_word();
 		break;
 	case 0xC1:                                                          // cmp (zp, x)
@@ -1257,53 +1321,70 @@ emulator_start:
 	case 0x0A:                                                          // asl a
 		SET_BIT_TO(p, CarryBit, CHECK_BIT(a, 7));
 		asl_bit_set(a <<= 1);
-		goto asl_end;
+		break;
 	case 0x06:                                                          // asl zp
 		read_next_zp();
-		goto asl_mem;
-	case 0x16:                                                          // asl zp, x
-		read_next_zp_x();
-		goto asl_mem;
-	case 0x0E:                                                          // asl abs
-		read_next_abs();
-		goto asl_mem;
-	case 0x1E:                                                          // asl abs, x
-		read_next_abs_x();
-	asl_mem:
 		if(!is_ram()) break;
 		SET_BIT_TO(p, CarryBit, CHECK_BIT(RAM[tmp_word], 7));
 		asl_bit_set((RAM[tmp_word] <<= 1));
 		events_write(tmp_word);
-	asl_end:
+		break;
+	case 0x16:                                                          // asl zp, x
+		read_next_zp_x();
+		SET_BIT_TO(p, CarryBit, CHECK_BIT(RAM[tmp_word], 7));
+		asl_bit_set((RAM[tmp_word] <<= 1));
+		events_write(tmp_word);
+		break;
+	case 0x0E:                                                          // asl abs
+		read_next_abs();
+		if(!is_ram()) break;
+		SET_BIT_TO(p, CarryBit, CHECK_BIT(RAM[tmp_word], 7));
+		asl_bit_set((RAM[tmp_word] <<= 1));
+		events_write(tmp_word);
+		break;
+	case 0x1E:                                                          // asl abs, x
+		read_next_abs_x();
+		if(!is_ram()) break;
+		SET_BIT_TO(p, CarryBit, CHECK_BIT(RAM[tmp_word], 7));
+		asl_bit_set((RAM[tmp_word] <<= 1));
+		events_write(tmp_word);
 		break;
 	case 0x4A:                                                          // lsr a
 		SET_BIT_TO(p, CarryBit, CHECK_BIT(a, 0));
 		lsr_bit_set(a >>= 1);
-		goto lsr_end;
+		break;
 	case 0x46:                                                          // lsr zp
 		read_next_zp();
-		goto lsr_mem;
+		SET_BIT_TO(p, CarryBit, CHECK_BIT(RAM[tmp_word], 0));
+		lsr_bit_set((RAM[tmp_word] >>= 1));
+		events_write(tmp_word);
+		break;
 	case 0x56:                                                          // lsr zp, x
 		read_next_zp_x();
-		goto lsr_mem;
+		SET_BIT_TO(p, CarryBit, CHECK_BIT(RAM[tmp_word], 0));
+		lsr_bit_set((RAM[tmp_word] >>= 1));
+		events_write(tmp_word);
+		break;
 	case 0x4E:                                                          // lsr abs
 		read_next_abs();
-		goto lsr_mem;
-	case 0x5E:                                                          // lsr abs, x
-		read_next_abs_x();
-	lsr_mem:
 		if(!is_ram()) break;
 		SET_BIT_TO(p, CarryBit, CHECK_BIT(RAM[tmp_word], 0));
 		lsr_bit_set((RAM[tmp_word] >>= 1));
 		events_write(tmp_word);
-	lsr_end:
+		break;
+	case 0x5E:                                                          // lsr abs, x
+		read_next_abs_x();
+		if(!is_ram()) break;
+		SET_BIT_TO(p, CarryBit, CHECK_BIT(RAM[tmp_word], 0));
+		lsr_bit_set((RAM[tmp_word] >>= 1));
+		events_write(tmp_word);
 		break;
 	case 0x2A:                                                          // rol a
 		SET_BIT_TO(p, UnusedBit, CHECK_BIT(p, CarryBit)); // XD
 		SET_BIT_TO(p, CarryBit, CHECK_BIT(a, 7));
 		a = (a << 1) | (CHECK_BIT(p, UnusedBit) >> UnusedBit);
 		rol_bit_set(a);
-		goto rol_end;
+		break;
 	case 0x26:                                                          // rol zp
 		read_next_zp();
 		goto rol_mem;
@@ -1321,15 +1402,13 @@ emulator_start:
 		SET_BIT_TO(p, CarryBit, CHECK_BIT(load_ram_byte(), 7));
 		write_ram_byte((load_ram_byte() << 1) | (CHECK_BIT(p, UnusedBit) >> UnusedBit));
 		rol_bit_set(load_ram_byte());
-	rol_end:
-		SET_BIT(p, UnusedBit);
 		break;
 	case 0x6A:                                                          // ror a
 		SET_BIT_TO(p, UnusedBit, CHECK_BIT(p, CarryBit)); // XD
 		SET_BIT_TO(p, CarryBit, CHECK_BIT(a, 0));
 		a = (a >> 1) | (CHECK_BIT(p, UnusedBit) << (7 - UnusedBit));
 		ror_bit_set(a);
-		goto ror_end;
+		break;
 	case 0x66:                                                          // ror zp
 		read_next_zp();
 		goto ror_mem;
@@ -1347,132 +1426,198 @@ emulator_start:
 		SET_BIT_TO(p, CarryBit, CHECK_BIT(load_ram_byte(), 0));
 		write_ram_byte((load_ram_byte() >> 1) | (CHECK_BIT(p, UnusedBit) << (7 - UnusedBit)));
 		ror_bit_set(load_ram_byte());
-	ror_end:
-		SET_BIT(p, UnusedBit);
 		break;
 	case 0x89:                                                          // bit # *
 		read_next_imm();
-		goto bit_end;
+		bit_bit_set();
+		break;
 	case 0x24:                                                          // bit zp
 		read_next_zp();
-		goto bit_mem;
+		tmp_word = load_ram_byte();
+		bit_bit_set();
+		break;
 	case 0x34:                                                          // bit zp, x *
 		read_next_zp_x();
-		goto bit_mem;
+		tmp_word = load_ram_byte();
+		bit_bit_set();
+		break;
 	case 0x2C:                                                          // bit abs
 		read_next_abs();
-		goto bit_mem;
+		tmp_word = load_any_byte();
+		bit_bit_set();
+		break;
 	case 0x3C:                                                          // bit abs, x *
 		read_next_abs_x();
-	bit_mem:
 		tmp_word = load_any_byte();
-	bit_end:
 		bit_bit_set();
 		break;
 	case 0x14:                                                          // trb zp *
 	case 0x04:                                                          // tsb zp *
 		read_next_zp();
-		goto trb_tsb_end;
+		tsb_trb_bit_set(load_ram_byte());
+		write_ram_byte((op_code > 0x10) ? ((~a) & load_ram_byte()) : (a | load_ram_byte()));
+		break;
 	case 0x1C:                                                          // trb abs *
 	case 0x0C:                                                          // tsb abs *
 		read_next_abs();
-	trb_tsb_end:
 		tsb_trb_bit_set(load_any_byte());
 		write_any_byte((op_code > 0x10) ? ((~a) & load_ram_byte()) : (a | load_ram_byte()));
 		break;
 	case 0x29:                                                          // and #
 		read_next_imm();
-		goto and_end;
+		a &= tmp_word;
+		and_bit_set();
+		break;
 	case 0x25:                                                          // and zp
 		read_next_zp();
-		goto and_mem;
+		tmp_word = load_ram_byte();
+		a &= tmp_word;
+		and_bit_set();
+		break;
 	case 0x35:                                                          // and zp, x
 		read_next_zp_x();
-		goto and_mem;
+		tmp_word = load_ram_byte();
+		a &= tmp_word;
+		and_bit_set();
+		break;
 	case 0x2D:                                                          // and abs
 		read_next_abs();
-		goto and_mem;
+		tmp_word = load_any_byte();
+		a &= tmp_word;
+		and_bit_set();
+		break;
 	case 0x3D:                                                          // and abs, x
 		read_next_abs_x();
-		goto and_mem;
+		tmp_word = load_any_byte();
+		a &= tmp_word;
+		and_bit_set();
+		break;
 	case 0x39:                                                          // and abs, y
 		read_next_abs_y();
-		goto and_mem;
+		tmp_word = load_any_byte();
+		a &= tmp_word;
+		and_bit_set();
+		break;
 	case 0x21:                                                          // and (zp, x)
 		read_next_zp_idx_ind();
-		goto and_mem;
+		tmp_word = load_any_byte();
+		a &= tmp_word;
+		and_bit_set();
+		break;
 	case 0x31:                                                          // and (zp), y
 		read_next_zp_ind_idx();
-		goto and_mem;
+		tmp_word = load_any_byte();
+		a &= tmp_word;
+		and_bit_set();
+		break;
 	case 0x32:                                                          // and (zp)    *
 		read_next_zp_ind();
-	and_mem:
 		tmp_word = load_any_byte();
-	and_end:
 		a &= tmp_word;
 		and_bit_set();
 		break;
 	case 0x49:                                                          // eor #
 		a ^= read_next_imm();
-		goto eor_end;
+		eor_bit_set();
+		break;
 	case 0x45:                                                          // eor zp
 		read_next_zp();
-		goto eor_mem;
+		tmp_word = load_ram_byte();
+		a ^= tmp_word;
+		eor_bit_set();
+		break;
 	case 0x55:                                                          // eor zp, x
 		read_next_zp_x();
-		goto eor_mem;
+		tmp_word = load_ram_byte();
+		a ^= tmp_word;
+		eor_bit_set();
+		break;
 	case 0x4D:                                                          // eor abs
 		read_next_abs();
-		goto eor_mem;
-	case 0x5D:                                                          // eor abs, x
-		read_next_abs_x();
-		goto eor_mem;
-	case 0x59:                                                          // eor abs, y
-		read_next_abs_y();
-		goto eor_mem;
-	case 0x41:                                                          // eor (zp, x)
-		read_next_zp_idx_ind();
-		goto eor_mem;
-	case 0x51:                                                          // eor (zp), y
-		read_next_zp_ind_idx();
-		goto eor_mem;
-	case 0x52:                                                          // eor (zp)    *
-		read_next_zp_ind();
-	eor_mem:
 		tmp_word = load_any_byte();
 		a ^= tmp_word;
-	eor_end:
+		eor_bit_set();
+		break;
+	case 0x5D:                                                          // eor abs, x
+		read_next_abs_x();
+		tmp_word = load_any_byte();
+		a ^= tmp_word;
+		eor_bit_set();
+		break;
+	case 0x59:                                                          // eor abs, y
+		read_next_abs_y();
+		tmp_word = load_any_byte();
+		a ^= tmp_word;
+		eor_bit_set();
+		break;
+	case 0x41:                                                          // eor (zp, x)
+		read_next_zp_idx_ind();
+		tmp_word = load_any_byte();
+		a ^= tmp_word;
+		eor_bit_set();
+		break;
+	case 0x51:                                                          // eor (zp), y
+		read_next_zp_ind_idx();
+		tmp_word = load_any_byte();
+		a ^= tmp_word;
+		eor_bit_set();
+		break;
+	case 0x52:                                                          // eor (zp)    *
+		read_next_zp_ind();
+		tmp_word = load_any_byte();
+		a ^= tmp_word;
 		eor_bit_set();
 		break;
 	case 0x09:                                                          // ora #
 		read_next_imm();
-		goto ora_end;
+		a |= tmp_word;
+		ora_bit_set();
+		break;
 	case 0x05:                                                          // ora zp
 		read_next_zp();
-		goto ora_mem;
+		tmp_word = load_ram_byte();
+		a |= tmp_word;
+		ora_bit_set();
+		break;
 	case 0x15:                                                          // ora zp, x
 		read_next_zp_x();
-		goto ora_mem;
+		tmp_word = load_ram_byte();
+		a |= tmp_word;
+		ora_bit_set();
+		break;
 	case 0x0D:                                                          // ora abs
 		read_next_abs();
-		goto ora_mem;
+		tmp_word = load_any_byte();
+		a |= tmp_word;
+		ora_bit_set();
+		break;
 	case 0x1D:                                                          // ora abs, x
 		read_next_abs_x();
-		goto ora_mem;
+		tmp_word = load_any_byte();
+		a |= tmp_word;
+		ora_bit_set();
+		break;
 	case 0x19:                                                          // ora abs, y
 		read_next_abs_y();
-		goto ora_mem;
+		tmp_word = load_any_byte();
+		a |= tmp_word;
+		ora_bit_set();
+		break;
 	case 0x11:                                                          // ora (zp), y
 		read_next_zp_idx_ind();
-		goto ora_mem;
+		tmp_word = load_any_byte();
+		a |= tmp_word;
+		ora_bit_set();
+		break;
 	case 0x01:                                                          // ora (zp, x)
 		read_next_zp_ind_idx();
-		goto ora_mem;
+		tmp_word = load_any_byte();
+		a |= tmp_word;
+		ora_bit_set();
+		break;
 	case 0x12:                                                          // ora (zp)    *
 		read_next_zp_ind();
-	ora_mem:
 		tmp_word = load_any_byte();
-	ora_end:
 		a |= tmp_word;
 		ora_bit_set();
 		break;
