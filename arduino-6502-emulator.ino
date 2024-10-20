@@ -1445,11 +1445,13 @@ emulator_start:
 		lsr_common(read_next_abs_x());
 		break;
 	case 0x2A:                                                          // rol a
-		SET_BIT_TO(p, UnusedBit, CHECK_BIT(p, CarryBit)); // XD
-		SET_BIT_TO(p, CarryBit, CHECK_BIT(a, 7));
-		a = (a << 1) | (CHECK_BIT(p, UnusedBit) >> UnusedBit);
-		rol_bit_set(a);
-		break;
+		{
+			uint8_t tmp = CHECK_BIT(p, CarryBit) >> CarryBit;
+			SET_BIT_TO(p, CarryBit, CHECK_BIT(a, 7));
+			a = (a << 1) | tmp;
+			ror_bit_set(a);
+			break;
+		}
 	case 0x26:                                                          // rol zp
 		rol_common(read_next_zp());
 		break;
@@ -1463,11 +1465,13 @@ emulator_start:
 		rol_common(read_next_abs_x());
 		break;
 	case 0x6A:                                                          // ror a
-		SET_BIT_TO(p, UnusedBit, CHECK_BIT(p, CarryBit)); // XD
-		SET_BIT_TO(p, CarryBit, CHECK_BIT(a, 0));
-		a = (a >> 1) | (CHECK_BIT(p, UnusedBit) << (7 - UnusedBit));
-		ror_bit_set(a);
-		break;
+		{
+			uint8_t tmp = CHECK_BIT(p, CarryBit) << (7 - CarryBit);
+			SET_BIT_TO(p, CarryBit, CHECK_BIT(a, 0));
+			a = (a >> 1) | tmp;
+			ror_bit_set(a);
+			break;
+		}
 	case 0x66:                                                          // ror zp
 		ror_common(read_next_zp());
 		break;
