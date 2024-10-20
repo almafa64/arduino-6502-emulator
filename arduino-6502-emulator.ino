@@ -10,6 +10,11 @@
 // ToDo: Split debug and no debug code (easier to read)
 // ToDo: Serial comm from emulator
 
+//#define TIMER
+#ifdef TIMER
+uint32_t timer;
+#endif
+
 // ---------------------- user defined ----------------------
 //#define ROM_START	    0xFEB1		// lcd display test
 #define ROM_START	    0xFFCC		// timer 1 one shot test on A5
@@ -262,19 +267,6 @@ uint8_t RAM_T2LL;
 
 // ---------------------- register setup ----------------------
 
-enum Flags
-{
-	No         = 0 << 0,
-	Carry      = 1 << 0,
-	Zero       = 1 << 1,
-	Interrupt  = 1 << 2,
-	Decimal    = 1 << 3,
-	Break      = 1 << 4,
-	Unused     = 1 << 5,
-	Overflow   = 1 << 6,
-	Negative   = 1 << 7,
-};
-
 enum FlagBits
 {
 	CarryBit,
@@ -285,6 +277,19 @@ enum FlagBits
 	UnusedBit,
 	OverflowBit,
 	NegativeBit,
+};
+
+enum Flags
+{
+	No         = 0 << 0,
+	Carry      = 1 << CarryBit,
+	Zero       = 1 << ZeroBit,
+	Interrupt  = 1 << InterruptBit,
+	Decimal    = 1 << DecimalBit,
+	Break      = 1 << BreakBit,
+	Unused     = 1 << UnusedBit,
+	Overflow   = 1 << OverflowBit,
+	Negative   = 1 << NegativeBit,
 };
 
 uint8_t a, x, y;
@@ -409,11 +414,9 @@ void print_help()
 #endif
 
 // ---------------------- ram & rom functions ----------------------
-uint16_t tmp_word;
-uint8_t tmp_byte;
 
-static inline bool is_ram(uint16_t address = tmp_word) { return (address <= RAM_END); }
-static inline bool is_rom(uint16_t address = tmp_word) { return (address >= ROM_START); }
+static inline bool is_ram(uint16_t address) { return (address <= RAM_END); }
+static inline bool is_rom(uint16_t address) { return (address >= ROM_START); }
 
 #if CHECK_BIT(VIA_SUPPORT, 1)
 
@@ -483,139 +486,133 @@ static inline void t2_end_start()
 #endif
 
 #if CHECK_BIT(VIA_SUPPORT, 0)
-static void WRITE_PORTS(bool is_pina)
+static inline void WRITE_PORTA()
 {
-	if(is_pina)
-	{
-		uint8_t port = RAM[MY_PORTA];
-		uint8_t ddr = RAM[MY_DDRA];
-		// PORTC A0 - A5
-		// PORTD D3 - D4
-		uint8_t d = PORTD;
-		uint8_t c = PORTC;
-		
-		const uint8_t c_mask = 0b11000000;
-		const uint8_t d_mask = 0b11100111;
-		
-		c &= c_mask;
-		c |= ((ddr & port) >> 0) & ~c_mask;     // A0-A5 -> A0-A5
-		
-		d &= d_mask;
-		d |= ((ddr & port) >> 3) & ~d_mask;     // 6-7 -> 3-4
+	uint8_t port = RAM[MY_PORTA];
+	uint8_t ddr = RAM[MY_DDRA];
+	// PORTC A0 - A5
+	// PORTD D3 - D4
+	uint8_t d = PORTD;
+	uint8_t c = PORTC;
 
-		PORTD = d;
-		PORTC = c;
-	}
-	else
-	{
-		uint8_t port = RAM[MY_PORTB];
-		uint8_t ddr = RAM[MY_DDRB];
-		// PORTD D5 - D7
-		// PORTB D8 - D12
-		uint8_t d = PORTD;
-		uint8_t b = PORTB;
-		
-		const uint8_t b_mask = 0b11100000;
-		const uint8_t d_mask = 0b00011111;
-		
-		d &= d_mask;
-		d |= ((ddr & port) << 5) & ~d_mask;     // 0-2 -> 5-7
+	const uint8_t c_mask = 0b11000000;
+	const uint8_t d_mask = 0b11100111;
 	
-		b &= b_mask;
-		b |= ((ddr & port) >> 3) & ~b_mask;     // 3-7 -> 0-4
-		
-		PORTD = d;
-		PORTB = b;
-	}
+	c &= c_mask;
+	c |= ((ddr & port) >> 0) & ~c_mask;     // A0-A5 -> A0-A5
+	
+	d &= d_mask;
+	d |= ((ddr & port) >> 3) & ~d_mask;     // 6-7 -> 3-4
+
+	PORTD = d;
+	PORTC = c;
 }
 
-static void READ_PORTS(bool is_pina)
+static inline void WRITE_PORTB()
 {
-	if(is_pina)
-	{
-		uint8_t ddr = RAM[MY_DDRA];
-		// PORTC A0 - A5
-		// PORTD D3 - D4
-		uint8_t d = PIND;
-		uint8_t c = PINC;
-		
-		const uint8_t c_mask = 0b00111111;
-		const uint8_t d_mask = 0b00011000;
-		
-		RAM[MY_PORTA] = ((c & c_mask) >> 0) & ~ddr;     // 0-5 -> 0-5
-		RAM[MY_PORTA] |= ((d & d_mask) >> 3) & ~ddr;    // 3-4 -> 6-7
-	}
-	else
-	{
-		uint8_t ddr = RAM[MY_DDRB];
-		// PORTD D5 - D7
-		// PORTB D8 - D12
-		uint8_t b = PINB;
-		uint8_t d = PIND;
-		
-		const uint8_t b_mask = 0b00011111;
-		const uint8_t d_mask = 0b11100000;
-		
-		RAM[MY_PORTB] = ((b & b_mask) << 3) & ~ddr;     // 0-4 -> 3-7
-		RAM[MY_PORTB] |= ((d & d_mask) >> 5) & ~ddr;    // 5-7 -> 0-2
-	}
+	uint8_t port = RAM[MY_PORTB];
+	uint8_t ddr = RAM[MY_DDRB];
+	// PORTD D5 - D7
+	// PORTB D8 - D12
+	uint8_t d = PORTD;
+	uint8_t b = PORTB;
+
+	const uint8_t b_mask = 0b11100000;
+	const uint8_t d_mask = 0b00011111;
+	
+	d &= d_mask;
+	d |= ((ddr & port) << 5) & ~d_mask;     // 0-2 -> 5-7
+
+	b &= b_mask;
+	b |= ((ddr & port) >> 3) & ~b_mask;     // 3-7 -> 0-4
+
+	PORTD = d;
+	PORTB = b;
 }
 
-static void DDR_PORTS(bool is_pina)
+static inline void READ_PORTA()
 {
-	if(is_pina)
-	{
-		uint8_t pullup = RAM[MY_PULLUPA];
-		uint8_t ddr = RAM[MY_DDRA];
-		// PORTC A0 - A5
-		// PORTD D3 - D4
-		
-		uint8_t d = DDRD, pd = PORTD;
-		uint8_t c = DDRC, pc = PORTC;
-		
-		const uint8_t c_mask = 0b11000000;
-		const uint8_t d_mask = 0b11100111;
-		
-		c &= c_mask;
-		c |= (ddr >> 0) & ~c_mask;              // A0-A5 -> A0-A5
-		
-		d &= d_mask;
-		d |= (ddr >> 3) & ~d_mask;              // 6-7 -> 3-4
+	uint8_t ddr = RAM[MY_DDRA];
+	// PORTC A0 - A5
+	// PORTD D3 - D4
+	uint8_t d = PIND;
+	uint8_t c = PINC;
+	
+	const uint8_t c_mask = 0b00111111;
+	const uint8_t d_mask = 0b00011000;
+	
+	RAM[MY_PORTA] = ((c & c_mask) >> 0) & ~ddr;     // 0-5 -> 0-5
+	RAM[MY_PORTA] |= ((d & d_mask) >> 3) & ~ddr;    // 3-4 -> 6-7
+}
 
-		pc |= (pullup >> 0) & ~c_mask;          // A0-A5 -> A0-A5
-		pd |= (pullup >> 3) & ~d_mask;          // 6-7 -> 3-4
+static inline void READ_PORTB()
+{
+	uint8_t ddr = RAM[MY_DDRB];
+	// PORTD D5 - D7
+	// PORTB D8 - D12
+	uint8_t b = PINB;
+	uint8_t d = PIND;
+	
+	const uint8_t b_mask = 0b00011111;
+	const uint8_t d_mask = 0b11100000;
+	
+	RAM[MY_PORTB] = ((b & b_mask) << 3) & ~ddr;     // 0-4 -> 3-7
+	RAM[MY_PORTB] |= ((d & d_mask) >> 5) & ~ddr;    // 5-7 -> 0-2
+}
 
-		DDRD = d;
-		DDRC = c;
-		PORTD = pd;
-		PORTC = pc;
-	}
-	else
-	{
-		uint8_t pullup = RAM[MY_PULLUPB];
-		uint8_t ddr = RAM[MY_DDRB];
-		// PORTD D5 - D7
-		// PORTB D8 - D12
-		uint8_t d = DDRD, pd = PORTD;
-		uint8_t b = DDRB, pb = PORTB;
-		
-		const uint8_t b_mask = 0b11100000;
-		const uint8_t d_mask = 0b00011111;
-		
-		d &= d_mask;
-		d |= (ddr << 5) & ~d_mask;              // 0-2 -> 5-7
+static inline void DDR_PORTA()
+{
+	uint8_t pullup = RAM[MY_PULLUPA];
+	uint8_t ddr = RAM[MY_DDRA];
+	// PORTC A0 - A5
+	// PORTD D3 - D4
+	
+	uint8_t d = DDRD, pd = PORTD;
+	uint8_t c = DDRC, pc = PORTC;
+	
+	const uint8_t c_mask = 0b11000000;
+	const uint8_t d_mask = 0b11100111;
+	
+	c &= c_mask;
+	c |= (ddr >> 0) & ~c_mask;              // A0-A5 -> A0-A5
+	
+	d &= d_mask;
+	d |= (ddr >> 3) & ~d_mask;              // 6-7 -> 3-4
 
-		b &= b_mask;
-		b |= (ddr >> 3) & ~b_mask;              // 3-7 -> 0-4
-		
-		pb |= (pullup >> 0) & ~b_mask;          // A0-A5 -> A0-A5
-		pd |= (pullup >> 3) & ~d_mask;          // 6-7 -> 3-4
-		
-		DDRD = d;
-		DDRB = b;
-		PORTD = pd;
-		PORTB = pb;
-	}
+	pc |= (pullup >> 0) & ~c_mask;          // A0-A5 -> A0-A5
+	pd |= (pullup >> 3) & ~d_mask;          // 6-7 -> 3-4
+
+	DDRD = d;
+	DDRC = c;
+	PORTD = pd;
+	PORTC = pc;
+}
+
+static inline void DDR_PORTB()
+{
+	uint8_t pullup = RAM[MY_PULLUPB];
+	uint8_t ddr = RAM[MY_DDRB];
+	// PORTD D5 - D7
+	// PORTB D8 - D12
+	uint8_t d = DDRD, pd = PORTD;
+	uint8_t b = DDRB, pb = PORTB;
+	
+	const uint8_t b_mask = 0b11100000;
+	const uint8_t d_mask = 0b00011111;
+	
+	d &= d_mask;
+	d |= (ddr << 5) & ~d_mask;              // 0-2 -> 5-7
+
+	b &= b_mask;
+	b |= (ddr >> 3) & ~b_mask;              // 3-7 -> 0-4
+	
+	pb |= (pullup >> 0) & ~b_mask;          // A0-A5 -> A0-A5
+	pd |= (pullup >> 3) & ~d_mask;          // 6-7 -> 3-4
+	
+	DDRD = d;
+	DDRB = b;
+	PORTD = pd;
+	PORTB = pb;
 }
 #endif
 
@@ -635,10 +632,10 @@ void events_read(uint16_t address)
 #endif
 #if CHECK_BIT(VIA_SUPPORT, 0)
 	case MY_PORTA:
-		READ_PORTS(true);
+		READ_PORTA();
 		break;
 	case MY_PORTB:
-		READ_PORTS(false);
+		READ_PORTB();
 		break;
 #endif
 	}
@@ -658,6 +655,10 @@ void events_write(uint16_t address)
 			SET_BIT(eventFlags, T1_StartBit);
 			RAM[MY_T1CL] = RAM[MY_T1LL];
 			RAM[MY_T1LH] = RAM[MY_T1CH];
+			#ifdef TIMER
+			Serial.println("start");
+			timer = micros();
+			#endif
 		}
 		break;
 	case MY_T1LH:
@@ -677,19 +678,19 @@ void events_write(uint16_t address)
 #if CHECK_BIT(VIA_SUPPORT, 0)
 	case MY_PORTA:
 	{
-		WRITE_PORTS(true);
+		WRITE_PORTA();
 		break;
 	}
 	case MY_PORTB:
 	{
-		WRITE_PORTS(false);
+		WRITE_PORTB();
 		break;
 	}
 	case MY_DDRA:
-		DDR_PORTS(true);
+		DDR_PORTA();
 		break;
 	case MY_DDRB:
-		DDR_PORTS(false);
+		DDR_PORTB();
 		break;
 #endif
 	}
@@ -701,15 +702,8 @@ static inline uint8_t    load_ram_byte(uint16_t address)                 { event
 static inline uint16_t   load_ram_word(uint16_t address)                 { return (load_ram_byte(address + 1) << 8) | load_ram_byte(address); }
 static inline uint8_t    load_any_byte(uint16_t address)                 { return (is_rom(address) ? load_rom_byte(address) : load_ram_byte(address)); }
 static inline uint16_t   load_any_word(uint16_t address)                 { return (is_rom(address) ? load_rom_word(address) : load_ram_word(address)); }
-
-static inline uint8_t    load_rom_byte()                                 { return load_rom_byte(tmp_word); }
-static inline uint16_t   load_rom_word()                                 { return load_rom_word(tmp_word); }
-static inline uint8_t    load_ram_byte()                                 { return load_ram_byte(tmp_word); }
-static inline uint16_t   load_ram_word()                                 { return load_ram_word(tmp_word); }
-static inline uint8_t    load_any_byte()                                 { return load_any_byte(tmp_word); }
-static inline uint16_t   load_any_word()                                 { return load_any_word(tmp_word); }
-static inline void       write_ram_byte(uint8_t data)                    { RAM[tmp_word] = data; events_write(tmp_word); }
-static inline void       write_any_byte(uint8_t data)                    { if(is_ram()) write_ram_byte(data); }
+static inline void       write_ram_byte(uint8_t data, uint16_t address)  { RAM[address] = data; events_write(address); }
+static inline void       write_any_byte(uint8_t data, uint16_t address)  { if(is_ram(address)) write_ram_byte(data, address); }
 
 static inline uint8_t    load_stack_byte()                               { return RAM[STACK_START + ++s]; }
 static inline uint16_t   load_stack_word()                               { return load_stack_byte() | (load_stack_byte() << 8); }
@@ -720,7 +714,7 @@ static inline void       write_stack_word(uint16_t data)
 	write_stack_byte(LOW_BYTE(data));
 }
 
-static inline uint8_t    read_next_byte() { return (tmp_word = load_any_byte(pc++)); }
+static inline uint8_t    read_next_byte() { return load_any_byte(pc++); }
 static inline uint16_t   read_next_word()
 {
 	pc += 2;
@@ -729,61 +723,79 @@ static inline uint16_t   read_next_word()
 
 static inline uint8_t  read_next_imm()        { return read_next_byte(); }
 static inline uint8_t  read_next_zp()         { return read_next_byte(); }
-static inline uint8_t  read_next_zp_x()       { return (tmp_word = ADD_BYTE(read_next_zp(), x)); }
-static inline uint8_t  read_next_zp_y()       { return (tmp_word = ADD_BYTE(read_next_zp(), y)); }
-static inline uint16_t read_next_zp_ind()     { return (tmp_word = load_ram_word(read_next_zp())); }
-static inline uint16_t read_next_zp_idx_ind() { return (tmp_word = load_ram_word(ADD_BYTE(read_next_zp(), x))); }
-static inline uint16_t read_next_zp_ind_idx() { return (tmp_word = load_ram_word(read_next_zp()) + y); }
-static inline uint16_t read_next_abs()        { return (tmp_word = read_next_word()); }
-static inline uint16_t read_next_abs_x()      { return (tmp_word = read_next_abs() + x); }
-static inline uint16_t read_next_abs_y()      { return (tmp_word = read_next_abs() + y); }
+static inline uint8_t  read_next_zp_x()       { return ADD_BYTE(read_next_zp(), x); }
+static inline uint8_t  read_next_zp_y()       { return ADD_BYTE(read_next_zp(), y); }
+static inline uint16_t read_next_zp_ind()     { return load_ram_word(read_next_zp()); }
+static inline uint16_t read_next_zp_idx_ind() { return load_ram_word(read_next_zp_x()); }
+static inline uint16_t read_next_zp_ind_idx() { return read_next_zp_ind() + y; }
+static inline uint16_t read_next_abs()        { return read_next_word(); }
+static inline uint16_t read_next_abs_x()      { return read_next_abs() + x; }
+static inline uint16_t read_next_abs_y()      { return read_next_abs() + y; }
 
-static inline void set_flags(uint8_t data, uint8_t flags_to_set)
+static inline void set_neg_zero_flags(uint8_t data)
 {
-	if(CHECK_BIT(flags_to_set, ZeroBit))        SET_BIT_TO(p, ZeroBit, data == 0);
-	if(CHECK_BIT(flags_to_set, NegativeBit))    SET_BIT_TO(p, NegativeBit, CHECK_BIT(data, NegativeBit));
-	if(CHECK_BIT(flags_to_set, OverflowBit))    SET_BIT_TO(p, OverflowBit, CHECK_BIT(data, OverflowBit));
+	/*SET_BIT_TO(p, ZeroBit, data == 0);
+	SET_BIT_TO(p, NegativeBit, CHECK_BIT(data, NegativeBit));*/
+	p &= ~(Zero | Negative);
+	p |= (data == 0) << ZeroBit;
+	p |= data & Negative;
 } 
 
-// BIT_SETS
-static inline void lda_bit_set() { set_flags(a, Negative | Zero); }
-static inline void ldx_bit_set() { set_flags(x, Negative | Zero); }
-static inline void ldy_bit_set() { set_flags(y, Negative | Zero); }
+// ---------------------- bit sets ----------------------
 
-static inline void pla_bit_set() { set_flags(a, Negative | Zero); }
-static inline void plx_bit_set() { set_flags(x, Negative | Zero); }
-static inline void ply_bit_set() { set_flags(y, Negative | Zero); }
+static inline void lda_bit_set() { set_neg_zero_flags(a); }
+static inline void ldx_bit_set() { set_neg_zero_flags(x); }
+static inline void ldy_bit_set() { set_neg_zero_flags(y); }
 
-static inline void tsx_bit_set() { set_flags(x, Negative | Zero); }
-static inline void txa_bit_set() { set_flags(a, Negative | Zero); }
-static inline void tax_bit_set() { set_flags(x, Negative | Zero); }
-static inline void tay_bit_set() { set_flags(y, Negative | Zero); }
-static inline void tya_bit_set() { set_flags(a, Negative | Zero); }
+static inline void pla_bit_set() { set_neg_zero_flags(a); }
+static inline void plx_bit_set() { set_neg_zero_flags(x); }
+static inline void ply_bit_set() { set_neg_zero_flags(y); }
 
-static inline void dec_bit_set(uint8_t data) { set_flags(data, Negative | Zero); }
-static inline void inc_bit_set(uint8_t data) { set_flags(data, Negative | Zero); }
+static inline void tsx_bit_set() { set_neg_zero_flags(x); }
+static inline void txa_bit_set() { set_neg_zero_flags(a); }
+static inline void tax_bit_set() { set_neg_zero_flags(x); }
+static inline void tay_bit_set() { set_neg_zero_flags(y); }
+static inline void tya_bit_set() { set_neg_zero_flags(a); }
 
-static inline void cmp_bit_set() { set_flags(SUB_BYTE(a, tmp_word), Negative | Zero); SET_BIT_TO(p, CarryBit, a >= tmp_word); }
-static inline void cpx_bit_set() { set_flags(SUB_BYTE(x, tmp_word), Negative | Zero); SET_BIT_TO(p, CarryBit, x >= tmp_word); }
-static inline void cpy_bit_set() { set_flags(SUB_BYTE(y, tmp_word), Negative | Zero); SET_BIT_TO(p, CarryBit, y >= tmp_word); }
+static inline void dec_bit_set(uint8_t data) { set_neg_zero_flags(data); }
+static inline void inc_bit_set(uint8_t data) { set_neg_zero_flags(data); }
 
-static inline void asl_bit_set(uint8_t data) { set_flags(data, Negative | Zero); }
-static inline void lsr_bit_set(uint8_t data) { set_flags(data, Negative | Zero); }
-static inline void rol_bit_set(uint8_t data) { set_flags(data, Negative | Zero); }
-static inline void ror_bit_set(uint8_t data) { set_flags(data, Negative | Zero); }
+static inline void cmp_bit_set(uint8_t data) { set_neg_zero_flags(SUB_BYTE(a, data)); SET_BIT_TO(p, CarryBit, a >= data); }
+static inline void cpx_bit_set(uint8_t data) { set_neg_zero_flags(SUB_BYTE(x, data)); SET_BIT_TO(p, CarryBit, x >= data); }
+static inline void cpy_bit_set(uint8_t data) { set_neg_zero_flags(SUB_BYTE(y, data)); SET_BIT_TO(p, CarryBit, y >= data); }
 
-static inline void bit_bit_set() { set_flags(tmp_word, Overflow | Negative); set_flags(a & tmp_word, Zero); }
+static inline void asl_bit_set(uint8_t data) { set_neg_zero_flags(data); }
+static inline void lsr_bit_set(uint8_t data) { set_neg_zero_flags(data); }
+static inline void rol_bit_set(uint8_t data) { set_neg_zero_flags(data); }
+static inline void ror_bit_set(uint8_t data) { set_neg_zero_flags(data); }
 
-static inline void tsb_trb_bit_set(uint8_t data) { set_flags(a & data, Zero); }
+static inline void bit_bit_set(uint8_t data) {
+	// 1. og (doesnt work)
+	//set_flags(data, Negative); SET_BIT_TO(p, OverflowBit, CHECK_BIT(data, OverflowBit)); set_flags(a & data, Zero);
+	// 2. inlined
+	/*SET_BIT_TO(p, NegativeBit, CHECK_BIT(data, NegativeBit));
+	SET_BIT_TO(p, OverflowBit, CHECK_BIT(data, OverflowBit));
+	SET_BIT_TO(p, ZeroBit, (a & data) == 0);*/
+	// 3. merged SET_BIT_TO
+	//p = (p & ~(Zero | Overflow | Negative)) | (((a & data) == 0) << ZeroBit | CHECK_BIT(data, OverflowBit) | CHECK_BIT(data, NegativeBit));
+	// 4. merged CHECK_BIT
+	//p = (p & ~(Zero | Overflow | Negative)) | (((a & data) == 0) << ZeroBit | (data & (Overflow | Negative)));
+	// 5. broken to multiple line
+	p &= ~(Zero | Overflow | Negative);
+	p |= ((a & data) == 0) << ZeroBit;
+	p |= data & (Overflow | Negative);
+}
 
-static inline void and_bit_set() { set_flags(a, Negative | Zero); }
-static inline void ora_bit_set() { set_flags(a, Negative | Zero); }
-static inline void eor_bit_set() { set_flags(a, Negative | Zero); }
+static inline void tsb_trb_bit_set(uint8_t data) { SET_BIT_TO(p, ZeroBit, (a & data) == 0); }
 
-static inline void adc_bit_set() { set_flags(a, Negative | Zero); }
-static inline void sbc_bit_set() { set_flags(a, Negative | Zero); }
+static inline void and_bit_set() { set_neg_zero_flags(a); }
+static inline void ora_bit_set() { set_neg_zero_flags(a); }
+static inline void eor_bit_set() { set_neg_zero_flags(a); }
 
-// ---------------------- Runnable ----------------------
+static inline void adc_bit_set() { set_neg_zero_flags(a); }
+static inline void sbc_bit_set() { set_neg_zero_flags(a); }
+
+// ---------------------- emulated functions ----------------------
 
 void irqb()
 {
@@ -796,6 +808,139 @@ void irqb()
 		pc = load_rom_word(BRK_IRQB);
 	}
 }
+
+static inline void dec_common(uint16_t address)
+{
+	uint8_t data = load_any_byte(address) - 1;
+	dec_bit_set(data);
+	write_any_byte(data, address);
+}
+
+static inline void inc_common(uint16_t address)
+{
+	uint8_t data = load_any_byte(address) + 1;
+	inc_bit_set(data);
+	write_any_byte(data, address);
+}
+
+static inline void asl_common(uint16_t address)
+{
+	SET_BIT_TO(p, CarryBit, CHECK_BIT(load_any_byte(address), 7));
+	asl_bit_set(RAM[address] <<= 1);
+	events_write(address);
+}
+
+static inline void lsr_common(uint16_t address)
+{
+	SET_BIT_TO(p, CarryBit, CHECK_BIT(load_any_byte(address), 0));
+	lsr_bit_set(RAM[address] >>= 1);
+	events_write(address);
+}
+
+static inline void trb_common(uint16_t address)
+{
+	uint8_t data = load_any_byte(address);
+	tsb_trb_bit_set(data);
+	write_any_byte((~a) & data, address);
+}
+
+static inline void tsb_common(uint16_t address)
+{
+	uint8_t data = load_any_byte(address);
+	tsb_trb_bit_set(data);
+	write_any_byte(a | data, address);
+}
+
+static inline void rmb_common()
+{
+	uint8_t address = read_next_zp();
+	uint8_t data = load_any_byte(address);
+	SET_BIT(data, HIGH_NIBBLE(op_code));          // 0x(0-7)X
+	write_any_byte(data, address);
+}
+
+static inline void smb_common()
+{
+	uint8_t address = read_next_zp();
+	uint8_t data = load_any_byte(address);
+	SET_BIT(data, HIGH_NIBBLE(op_code - 0x80));   // 0x(8-F)X - 0x80 = 0x(0-7)X
+	write_any_byte(data, address);
+}
+
+static inline void adc_common(uint8_t data)
+{
+	uint8_t tmp;
+	if(CHECK_BIT(p, DecimalBit))
+	{
+		// http://www.6502.org/tutorials/decimal_mode.html#A
+		tmp = LOW_NIBBLE(a) + LOW_NIBBLE(data) + CHECK_BIT(p, CarryBit);   // 1a. AL = (A & $0F) + (B & $0F) + C
+		if(tmp >= 0x0A) tmp = LOW_NIBBLE(tmp + 0x06) + 0x10;               // 1b. If AL >= $0A, then AL = ((AL + $06) & $0F) + $10
+		tmp = (a & 0xF0) + (data & 0xF0) + tmp;                            // 1c. A = (A & $F0) + (B & $F0) + AL
+		if(tmp >= 0xA0)                                                    // 1e. If (A >= $A0), then A = A + $60
+		{
+			tmp += 0x60;
+			SET_BIT(p, CarryBit);
+		}
+		else CLEAR_BIT(p, CarryBit);
+	}
+	else
+	{
+		tmp = a + data + CHECK_BIT(p, CarryBit);
+		SET_BIT_TO(p, CarryBit, tmp < a);
+	}
+	SET_BIT_TO(p, OverflowBit, !CHECK_BIT(data ^ a, 7) && CHECK_BIT(data ^ tmp, 7)); //(M^result)&(N^result)&0x80 , !((M^N) & 0x80) && ((M^result) & 0x80)
+	a = tmp;
+	adc_bit_set();
+}
+
+static inline void sbc_common(uint8_t data)
+{
+	uint8_t tmp;
+	if(CHECK_BIT(p, DecimalBit))
+	{
+		// http://www.6502.org/tutorials/decimal_mode.html#A
+		// ToDo: maybe this is seq. 4 not 3
+		tmp = LOW_NIBBLE(a) - LOW_NIBBLE(data) - !CHECK_BIT(p, CarryBit);   // AL = (A & $0F) - (B & $0F) + C-1
+		if(tmp >= 0x80) tmp = LOW_NIBBLE(tmp - 0x06) - 0x10;                // If AL < 0, then AL = ((AL - $06) & $0F) - $10
+		tmp = (a & 0xF0) - (data & 0xF0) + tmp;                             // A = (A & $F0) - (B & $F0) + AL
+		if(tmp >= 0x80)                                                     // If A < 0, then A = A - $60
+		{
+			tmp -= 0x60;
+			CLEAR_BIT(p, CarryBit);
+		}
+		else SET_BIT(p, CarryBit);
+	}
+	else
+	{
+		tmp = a - data - !CHECK_BIT(p, CarryBit);
+		SET_BIT_TO(p, CarryBit, tmp <= a);
+	}
+	SET_BIT_TO(p, OverflowBit, CHECK_BIT(data ^ a, 7) && !CHECK_BIT(data ^ tmp, 7)); //(M^result)&(N^result)&0x80 , !((M^N) & 0x80) && ((M^result) & 0x80)
+	a = tmp;
+	sbc_bit_set();
+}
+
+static inline void rol_common(uint16_t address)
+{
+	uint8_t tmp = CHECK_BIT(p, CarryBit) >> CarryBit;
+	uint8_t data = load_any_byte(address);
+	SET_BIT_TO(p, CarryBit, CHECK_BIT(data, 7));
+	data = (data << 1) | tmp;
+	rol_bit_set(data);
+	write_any_byte(data, address);
+}
+
+static inline void ror_common(uint16_t address)
+{
+	uint8_t tmp = CHECK_BIT(p, CarryBit) << (7 - CarryBit);
+	uint8_t data = load_any_byte(address);
+	SET_BIT_TO(p, CarryBit, CHECK_BIT(data, 0));
+	data = (data >> 1) | tmp;
+	ror_bit_set(data);
+	write_any_byte(data, address);
+}
+
+// ---------------------- Runnable ----------------------
 
 void setup()
 {
@@ -870,43 +1015,35 @@ emulator_start:
 		lda_bit_set();
 		break;
 	case 0xA5:                                                          // lda zp
-		read_next_zp();
-		a = load_ram_byte();
+		a = load_any_byte(read_next_zp());
 		lda_bit_set();
 		break;
 	case 0xB5:                                                          // lda zp, x
-		read_next_zp_x();
-		a = load_any_byte();
+		a = load_any_byte(read_next_zp_x());
 		lda_bit_set();
 		break;
 	case 0xAD:                                                          // lda abs
-		read_next_abs();
-		a = load_any_byte();
+		a = load_any_byte(read_next_abs());
 		lda_bit_set();
 		break;
 	case 0xBD:                                                          // lda abs, x
-		read_next_abs_x();
-		a = load_any_byte();
+		a = load_any_byte(read_next_abs_x());
 		lda_bit_set();
 		break;
 	case 0xB9:                                                          // lda abs, y
-		read_next_abs_y();
-		a = load_any_byte();
+		a = load_any_byte(read_next_abs_y());
 		lda_bit_set();
 		break;
 	case 0xA1:                                                          // lda (zp, x)
-		read_next_zp_idx_ind();
-		a = load_any_byte();
+		a = load_any_byte(read_next_zp_idx_ind());
 		lda_bit_set();
 		break;
 	case 0xB1:                                                          // lda (zp), y
-		read_next_zp_ind_idx();
-		a = load_any_byte();
+		a = load_any_byte(read_next_zp_ind_idx());
 		lda_bit_set();
 		break;
 	case 0xB2:                                                          // lda (zp)    *
-		read_next_zp_ind();
-		a = load_any_byte();
+		a = load_any_byte(read_next_zp_ind());
 		lda_bit_set();
 		break;
 	case 0xA2:                                                          // ldx #
@@ -914,23 +1051,19 @@ emulator_start:
 		ldx_bit_set();
 		break;
 	case 0xA6:                                                          // ldx zp
-		read_next_zp();
-		x = load_ram_byte();
+		x = load_any_byte(read_next_zp());
 		ldx_bit_set();
 		break;
 	case 0xB6:                                                          // ldx zp, y
-		read_next_zp_y();
-		x = load_any_byte();
+		x = load_any_byte(read_next_zp_y());
 		ldx_bit_set();
 		break;
 	case 0xAE:                                                          // ldx abs
-		read_next_abs();
-		x = load_any_byte();
+		x = load_any_byte(read_next_abs());
 		ldx_bit_set();
 		break;
 	case 0xBE:                                                          // ldx abs, y
-		read_next_abs_y();
-		x = load_any_byte();
+		x = load_any_byte(read_next_abs_y());
 		ldx_bit_set();
 		break;
 	case 0xA0:                                                          // ldy #
@@ -938,96 +1071,74 @@ emulator_start:
 		ldy_bit_set();
 		break;
 	case 0xA4:                                                          // ldy zp
-		read_next_zp();
-		y = load_ram_byte();
+		y = load_any_byte(read_next_zp());
 		ldy_bit_set();
 		break;
 	case 0xB4:                                                          // ldy zp, x
-		read_next_zp_x();
-		y = load_any_byte();
+		y = load_any_byte(read_next_zp_x());
 		ldy_bit_set();
 		break;
 	case 0xAC:                                                          // ldy abs
-		read_next_abs();
-		y = load_any_byte();
+		y = load_any_byte(read_next_abs());
 		ldy_bit_set();
 		break;
 	case 0xBC:                                                          // ldy abs, x
-		read_next_abs_x();
-		y = load_any_byte();
+		y = load_any_byte(read_next_abs_x());
 		ldy_bit_set();
 		break;
 	case 0x85:                                                          // sta zp
-		read_next_zp();
-		write_ram_byte(a);
+		write_any_byte(a, read_next_zp());
 		break;
 	case 0x95:                                                          // sta zp, x
-		read_next_zp_x();
-		write_ram_byte(a);
+		write_any_byte(a, read_next_zp_x());
 		break;
 	case 0x8D:                                                          // sta abs
-		read_next_abs();
-		write_any_byte(a);
+		write_any_byte(a, read_next_abs());
 		break;
 	case 0x9D:                                                          // sta abs, x
-		read_next_abs_x();
-		write_any_byte(a);
+		write_any_byte(a, read_next_abs_x());
 		break;
 	case 0x99:                                                          // sta abs, y
-		read_next_abs_y();
-		write_any_byte(a);
+		write_any_byte(a, read_next_abs_y());
 		break;
 	case 0x81:                                                          // sta (zp, x)
-		read_next_zp_idx_ind();
-		write_any_byte(a);
+		write_any_byte(a, read_next_zp_idx_ind());
 		break;
 	case 0x91:                                                          // sta (zp), y
-		read_next_zp_ind_idx();
-		write_any_byte(a);
+		write_any_byte(a, read_next_zp_ind_idx());
 		break;
 	case 0x92:                                                          // sta (zp)     *
-		read_next_zp_ind();
-		write_any_byte(a);
+		write_any_byte(a, read_next_zp_ind());
 		break;
 	case 0x64:                                                          // stz zp       *
-		read_next_zp();
-		write_any_byte(0);
+		write_any_byte(0, read_next_zp());
 		break;
 	case 0x74:                                                          // stz zp, x    *
-		read_next_zp_x();
-		write_ram_byte(0);
+		write_any_byte(0, read_next_zp_x());
 		break;
 	case 0x9C:                                                          // stz abs      *
-		read_next_abs();
-		write_any_byte(0);
+		write_any_byte(0, read_next_abs());
 		break;
 	case 0x9E:                                                          // stz abs, x   *
-		read_next_abs_x();
-		write_any_byte(0);
+		write_any_byte(0, read_next_abs_x());
 		break;
 	case 0x86:                                                          // stx zp
-		read_next_zp();
-		write_ram_byte(x);
+		write_any_byte(x, read_next_zp());
 		break;
 	case 0x96:                                                          // stx zp, y
-		read_next_zp_y();
-		write_any_byte(x);
+		write_any_byte(x, read_next_zp_y());
 		break;
 	case 0x8E:                                                          // stx abs
-		read_next_abs();
-		write_any_byte(x);
+		write_any_byte(x, read_next_abs());
 		break;
 	case 0x84:                                                          // sty zp
-		read_next_zp();
-		write_ram_byte(y);
+		write_any_byte(y, read_next_zp());
 		break;
 	case 0x94:                                                          // sty zp, x
-		read_next_zp_x();
-		write_ram_byte(y);
+		write_any_byte(y, read_next_zp_x());
 		break;
 	case 0x8C:                                                          // sty abs
-		read_next_abs();
-		write_any_byte(y);
+		write_any_byte(y, read_next_abs());
 		break;
 	case 0x0F:                                                          // bbr0 *
 	case 0x1F:                                                          // bbr1 *
@@ -1037,7 +1148,7 @@ emulator_start:
 	case 0x5F:                                                          // bbr5 *
 	case 0x6F:                                                          // bbr6 *
 	case 0x7F:                                                          // bbr7 *
-		if(!CHECK_BIT(load_ram_byte(read_next_zp()), HIGH_NIBBLE(op_code)))
+		if(!CHECK_BIT(load_any_byte(read_next_zp()), HIGH_NIBBLE(op_code)))
 			pc += static_cast<int8_t>(read_next_imm());
 		else
 			++pc;
@@ -1050,7 +1161,7 @@ emulator_start:
 	case 0xDF:                                                          // bbs5 *
 	case 0xEF:                                                          // bbs6 *
 	case 0xFF:                                                          // bbs7 *
-		if(CHECK_BIT(load_ram_byte(read_next_zp()), HIGH_NIBBLE(op_code - 0x80)))
+		if(CHECK_BIT(load_any_byte(read_next_zp()), HIGH_NIBBLE(op_code - 0x80)))
 			pc += static_cast<int8_t>(read_next_imm());
 		else
 			++pc;
@@ -1164,8 +1275,7 @@ emulator_start:
 	case 0x57:                                                          // rmb5 *
 	case 0x67:                                                          // rmb6 *
 	case 0x77:                                                          // rmb7 *
-		if(is_ram(read_next_zp()))
-			CLEAR_BIT(RAM[tmp_word], HIGH_NIBBLE(op_code));
+		rmb_common();
 		break;
 	case 0x87:                                                          // smb0 *
 	case 0x97:                                                          // smb1 *
@@ -1175,8 +1285,7 @@ emulator_start:
 	case 0xD7:                                                          // smb5 *
 	case 0xE7:                                                          // smb6 *
 	case 0xF7:                                                          // smb7 *
-		if(is_ram(read_next_zp()))
-			SET_BIT(RAM[tmp_word], HIGH_NIBBLE(op_code - 0x80));
+		smb_common();
 		break;
 	case 0x18:                                                          // clc
 		CLEAR_BIT(p, CarryBit);
@@ -1209,26 +1318,16 @@ emulator_start:
 		dec_bit_set(--y);
 		break;
 	case 0xC6:                                                          // dec zp
-		read_next_zp();
-		dec_bit_set(--RAM[tmp_word]);
-		events_write(tmp_word);
+		dec_common(read_next_zp());
 		break;
 	case 0xD6:                                                          // dec zp, x
-		read_next_zp_x();
-		dec_bit_set(--RAM[tmp_word]);
-		events_write(tmp_word);
+		dec_common(read_next_zp_x());
 		break;
 	case 0xCE:                                                          // dec abs
-		read_next_abs();
-		if(!is_ram()) break;
-		dec_bit_set(--RAM[tmp_word]);
-		events_write(tmp_word);
+		dec_common(read_next_abs());
 		break;
 	case 0xDE:                                                          // dec abs, x
-		read_next_abs_x();
-		if(!is_ram()) break;
-		dec_bit_set(--RAM[tmp_word]);
-		events_write(tmp_word);
+		dec_common(read_next_abs_x());
 		break;
 	case 0x1A:                                                          // inc A *
 		inc_bit_set(++a);
@@ -1240,40 +1339,27 @@ emulator_start:
 		inc_bit_set(++y);
 		break;
 	case 0xE6:                                                          // inc zp
-		read_next_zp();
-		inc_bit_set(++RAM[tmp_word]);
-		events_write(tmp_word);
+		inc_common(read_next_zp());
 		break;
 	case 0xF6:                                                          // inc zp, x
-		read_next_zp_x();
-		inc_bit_set(++RAM[tmp_word]);
-		events_write(tmp_word);
+		inc_common(read_next_zp_x());
 		break;
 	case 0xEE:                                                          // inc abs
-		read_next_abs();
-		if(!is_ram()) break;
-		inc_bit_set(++RAM[tmp_word]);
-		events_write(tmp_word);
+		inc_common(read_next_abs());
 		break;
 	case 0xFE:                                                          // inc abs, x
-		read_next_abs_x();
-		if(!is_ram()) break;
-		inc_bit_set(++RAM[tmp_word]);
-		events_write(tmp_word);
+		inc_common(read_next_abs_x());
 		break;
 	case 0x6C:                                                          // jmp (abs)
-		tmp_word = load_any_word(read_next_abs());
-		pc = tmp_word;
+		pc = load_any_word(read_next_abs());
 		break;
 	case 0x7C:                                                          // jmp (abs, x)
-		tmp_word = load_any_word(read_next_abs_x());
-		pc = tmp_word;
+		pc = load_any_word(read_next_abs_x());
 		break;
 	case 0x20:                                                          // jsr abs
 		write_stack_word(pc + 2);
 	case 0x4C:                                                          // jmp abs
-		read_next_abs();
-		pc = tmp_word;
+		pc = read_next_abs();
 		break;
 	case 0x40:                                                          // rti
 		//https://www.masswerk.at/6502/6502_instruction_set.html#RTI
@@ -1281,103 +1367,82 @@ emulator_start:
 	case 0x60:                                                          // rts
 		pc = load_stack_word();
 		break;
-	case 0xC1:                                                          // cmp (zp, x)
-	case 0xD1:                                                          // cmp (zp), y
-	case 0xD2:                                                          // cmp (zp)     *
-		tmp_word = load_ram_word(ADD_BYTE(read_next_zp(), ((op_code == 0xC1) ? x : 0))) + ((op_code == 0xD1) ? y : 0);
-		goto cpx_cpy_cmp_mem;
-	case 0xC9:                                                          // cmp #
 	case 0xE0:                                                          // cpx #
-	case 0xC0:                                                          // cpy #
-		read_next_imm();
-		goto cpx_cpy_cmp_branch;
+		cpx_bit_set(read_next_imm());
+		break;
 	case 0xE4:                                                          // cpx zp
-	case 0xC4:                                                          // cpy zp
-	case 0xC5:                                                          // cmp zp
-	case 0xD5:                                                          // cmp zp, x
-		tmp_word = ADD_BYTE(read_next_zp(), ((op_code == 0xD5) ? x : 0));
-		goto cpx_cpy_cmp_mem;
+		cpx_bit_set(load_any_byte(read_next_zp()));
+		break;
 	case 0xEC:                                                          // cpx abs
+		cpx_bit_set(load_any_byte(read_next_abs()));
+		break;
+	case 0xC0:                                                          // cpy #
+		cpy_bit_set(read_next_imm());
+		break;
+	case 0xC4:                                                          // cpy zp
+		cpy_bit_set(load_any_byte(read_next_zp()));
+		break;
 	case 0xCC:                                                          // cpy abs
+		cpy_bit_set(load_any_byte(read_next_abs()));
+		break;
+	case 0xC9:                                                          // cmp #
+		cmp_bit_set(read_next_imm());
+		break;
+	case 0xC5:                                                          // cmp zp
+		cmp_bit_set(load_any_byte(read_next_zp()));
+		break;
+	case 0xD5:                                                          // cmp zp, x
+		cmp_bit_set(load_any_byte(read_next_zp_x()));
+		break;
+	case 0xC1:                                                          // cmp (zp, x)
+		cmp_bit_set(load_any_byte(read_next_zp_idx_ind()));
+		break;
+	case 0xD1:                                                          // cmp (zp), y
+		cmp_bit_set(load_any_byte(read_next_zp_ind_idx()));
+		break;
+	case 0xD2:                                                          // cmp (zp)     *
+		cmp_bit_set(load_any_byte(read_next_zp_ind()));
+		break;
 	case 0xCD:                                                          // cmp abs
+		cmp_bit_set(load_any_byte(read_next_abs()));
+		break;
 	case 0xDD:                                                          // cmp abs, x
+		cmp_bit_set(load_any_byte(read_next_abs_x()));
+		break;
 	case 0xD9:                                                          // cmp abs, y
-		tmp_word = read_next_abs() + ((op_code == 0xDD) ? x : ((op_code == 0xD9) ? y : 0));
-	cpx_cpy_cmp_mem:
-		tmp_word = load_any_byte();
-	cpx_cpy_cmp_branch:
-		if (op_code == 0xD2 || CHECK_BIT(op_code, 0)) goto cmp_end;
-		else if(op_code >= 0xE0) goto cpx_end;
-		else goto cpy_end;
-	cpy_end:
-		cpy_bit_set();
-		break;
-	cpx_end:
-		cpx_bit_set();
-		break;
-	cmp_end:
-		cmp_bit_set();
+		cmp_bit_set(load_any_byte(read_next_abs_y()));
 		break;
 	case 0x0A:                                                          // asl a
 		SET_BIT_TO(p, CarryBit, CHECK_BIT(a, 7));
 		asl_bit_set(a <<= 1);
 		break;
 	case 0x06:                                                          // asl zp
-		read_next_zp();
-		if(!is_ram()) break;
-		SET_BIT_TO(p, CarryBit, CHECK_BIT(RAM[tmp_word], 7));
-		asl_bit_set((RAM[tmp_word] <<= 1));
-		events_write(tmp_word);
+		asl_common(read_next_zp());
 		break;
 	case 0x16:                                                          // asl zp, x
-		read_next_zp_x();
-		SET_BIT_TO(p, CarryBit, CHECK_BIT(RAM[tmp_word], 7));
-		asl_bit_set((RAM[tmp_word] <<= 1));
-		events_write(tmp_word);
+		asl_common(read_next_zp_x());
 		break;
 	case 0x0E:                                                          // asl abs
-		read_next_abs();
-		if(!is_ram()) break;
-		SET_BIT_TO(p, CarryBit, CHECK_BIT(RAM[tmp_word], 7));
-		asl_bit_set((RAM[tmp_word] <<= 1));
-		events_write(tmp_word);
+		asl_common(read_next_abs());
 		break;
 	case 0x1E:                                                          // asl abs, x
-		read_next_abs_x();
-		if(!is_ram()) break;
-		SET_BIT_TO(p, CarryBit, CHECK_BIT(RAM[tmp_word], 7));
-		asl_bit_set((RAM[tmp_word] <<= 1));
-		events_write(tmp_word);
+		asl_common(read_next_abs_x());
 		break;
 	case 0x4A:                                                          // lsr a
 		SET_BIT_TO(p, CarryBit, CHECK_BIT(a, 0));
 		lsr_bit_set(a >>= 1);
 		break;
 	case 0x46:                                                          // lsr zp
-		read_next_zp();
-		SET_BIT_TO(p, CarryBit, CHECK_BIT(RAM[tmp_word], 0));
-		lsr_bit_set((RAM[tmp_word] >>= 1));
-		events_write(tmp_word);
+		lsr_common(read_next_zp());
 		break;
 	case 0x56:                                                          // lsr zp, x
-		read_next_zp_x();
-		SET_BIT_TO(p, CarryBit, CHECK_BIT(RAM[tmp_word], 0));
-		lsr_bit_set((RAM[tmp_word] >>= 1));
-		events_write(tmp_word);
+		lsr_common(read_next_zp_x());
 		break;
 	case 0x4E:                                                          // lsr abs
-		read_next_abs();
-		if(!is_ram()) break;
-		SET_BIT_TO(p, CarryBit, CHECK_BIT(RAM[tmp_word], 0));
-		lsr_bit_set((RAM[tmp_word] >>= 1));
-		events_write(tmp_word);
+		lsr_common(read_next_abs());
 		break;
 	case 0x5E:                                                          // lsr abs, x
-		read_next_abs_x();
-		if(!is_ram()) break;
-		SET_BIT_TO(p, CarryBit, CHECK_BIT(RAM[tmp_word], 0));
-		lsr_bit_set((RAM[tmp_word] >>= 1));
-		events_write(tmp_word);
+		lsr_common(read_next_abs_x());
 		break;
 	case 0x2A:                                                          // rol a
 		SET_BIT_TO(p, UnusedBit, CHECK_BIT(p, CarryBit)); // XD
@@ -1386,22 +1451,16 @@ emulator_start:
 		rol_bit_set(a);
 		break;
 	case 0x26:                                                          // rol zp
-		read_next_zp();
-		goto rol_mem;
+		rol_common(read_next_zp());
+		break;
 	case 0x36:                                                          // rol zp, x
-		read_next_zp_x();
-		goto rol_mem;
+		rol_common(read_next_zp_x());
+		break;
 	case 0x2E:                                                          // rol abs
-		read_next_abs();
-		goto rol_mem;
+		rol_common(read_next_abs());
+		break;
 	case 0x3E:                                                          // rol abs, x
-		read_next_abs_x();
-	rol_mem:
-		if(!is_ram()) break;
-		SET_BIT_TO(p, UnusedBit, CHECK_BIT(p, CarryBit)); // XD
-		SET_BIT_TO(p, CarryBit, CHECK_BIT(load_ram_byte(), 7));
-		write_ram_byte((load_ram_byte() << 1) | (CHECK_BIT(p, UnusedBit) >> UnusedBit));
-		rol_bit_set(load_ram_byte());
+		rol_common(read_next_abs_x());
 		break;
 	case 0x6A:                                                          // ror a
 		SET_BIT_TO(p, UnusedBit, CHECK_BIT(p, CarryBit)); // XD
@@ -1410,110 +1469,78 @@ emulator_start:
 		ror_bit_set(a);
 		break;
 	case 0x66:                                                          // ror zp
-		read_next_zp();
-		goto ror_mem;
+		ror_common(read_next_zp());
+		break;
 	case 0x76:                                                          // ror zp, x
-		read_next_zp_x();
-		goto ror_mem;
+		ror_common(read_next_zp_x());
+		break;
 	case 0x6E:                                                          // ror abs
-		read_next_abs();
-		goto ror_mem;
+		ror_common(read_next_abs());
+		break;
 	case 0x7E:                                                          // ror abs, x
-		read_next_abs_x();
-	ror_mem:
-		if(!is_ram()) break;
-		SET_BIT_TO(p, UnusedBit, CHECK_BIT(p, CarryBit)); // XD
-		SET_BIT_TO(p, CarryBit, CHECK_BIT(load_ram_byte(), 0));
-		write_ram_byte((load_ram_byte() >> 1) | (CHECK_BIT(p, UnusedBit) << (7 - UnusedBit)));
-		ror_bit_set(load_ram_byte());
+		ror_common(read_next_abs_x());
 		break;
 	case 0x89:                                                          // bit # *
-		read_next_imm();
-		bit_bit_set();
+		bit_bit_set(read_next_imm());
 		break;
 	case 0x24:                                                          // bit zp
-		read_next_zp();
-		tmp_word = load_ram_byte();
-		bit_bit_set();
+		bit_bit_set(load_any_byte(read_next_zp()));
 		break;
 	case 0x34:                                                          // bit zp, x *
-		read_next_zp_x();
-		tmp_word = load_ram_byte();
-		bit_bit_set();
+		bit_bit_set(load_any_byte(read_next_zp_x()));
 		break;
 	case 0x2C:                                                          // bit abs
-		read_next_abs();
-		tmp_word = load_any_byte();
-		bit_bit_set();
+		bit_bit_set(load_any_byte(read_next_abs()));
 		break;
 	case 0x3C:                                                          // bit abs, x *
-		read_next_abs_x();
-		tmp_word = load_any_byte();
-		bit_bit_set();
+		bit_bit_set(load_any_byte(read_next_abs_x()));
 		break;
 	case 0x14:                                                          // trb zp *
-	case 0x04:                                                          // tsb zp *
-		read_next_zp();
-		tsb_trb_bit_set(load_ram_byte());
-		write_ram_byte((op_code > 0x10) ? ((~a) & load_ram_byte()) : (a | load_ram_byte()));
+		trb_common(read_next_zp());
 		break;
 	case 0x1C:                                                          // trb abs *
+		trb_common(read_next_abs());
+		break;
+	case 0x04:                                                          // tsb zp *
+		tsb_common(read_next_zp());
+		break;
 	case 0x0C:                                                          // tsb abs *
-		read_next_abs();
-		tsb_trb_bit_set(load_any_byte());
-		write_any_byte((op_code > 0x10) ? ((~a) & load_ram_byte()) : (a | load_ram_byte()));
+		tsb_common(read_next_abs());
 		break;
 	case 0x29:                                                          // and #
-		read_next_imm();
-		a &= tmp_word;
+		a &= read_next_imm();
 		and_bit_set();
 		break;
 	case 0x25:                                                          // and zp
-		read_next_zp();
-		tmp_word = load_ram_byte();
-		a &= tmp_word;
+		a &= load_any_byte(read_next_zp());
 		and_bit_set();
 		break;
 	case 0x35:                                                          // and zp, x
-		read_next_zp_x();
-		tmp_word = load_ram_byte();
-		a &= tmp_word;
+		a &= load_any_byte(read_next_zp_x());
 		and_bit_set();
 		break;
 	case 0x2D:                                                          // and abs
-		read_next_abs();
-		tmp_word = load_any_byte();
-		a &= tmp_word;
+		a &= load_any_byte(read_next_abs());
 		and_bit_set();
 		break;
 	case 0x3D:                                                          // and abs, x
-		read_next_abs_x();
-		tmp_word = load_any_byte();
-		a &= tmp_word;
+		a &= load_any_byte(read_next_abs_x());
 		and_bit_set();
 		break;
 	case 0x39:                                                          // and abs, y
-		read_next_abs_y();
-		tmp_word = load_any_byte();
-		a &= tmp_word;
+		a &= load_any_byte(read_next_abs_y());
 		and_bit_set();
 		break;
 	case 0x21:                                                          // and (zp, x)
-		read_next_zp_idx_ind();
-		tmp_word = load_any_byte();
-		a &= tmp_word;
+		a &= load_any_byte(read_next_zp_idx_ind());
 		and_bit_set();
 		break;
 	case 0x31:                                                          // and (zp), y
-		read_next_zp_ind_idx();
-		tmp_word = load_any_byte();
-		a &= tmp_word;
+		a &= load_any_byte(read_next_zp_ind_idx());
 		and_bit_set();
 		break;
 	case 0x32:                                                          // and (zp)    *
-		read_next_zp_ind();
-		tmp_word = load_any_byte();
-		a &= tmp_word;
+		a &= load_any_byte(read_next_zp_ind());
 		and_bit_set();
 		break;
 	case 0x49:                                                          // eor #
@@ -1521,207 +1548,126 @@ emulator_start:
 		eor_bit_set();
 		break;
 	case 0x45:                                                          // eor zp
-		read_next_zp();
-		tmp_word = load_ram_byte();
-		a ^= tmp_word;
+		a ^= load_any_byte(read_next_zp());
 		eor_bit_set();
 		break;
 	case 0x55:                                                          // eor zp, x
-		read_next_zp_x();
-		tmp_word = load_ram_byte();
-		a ^= tmp_word;
+		a ^= load_any_byte(read_next_zp_x());
 		eor_bit_set();
 		break;
 	case 0x4D:                                                          // eor abs
-		read_next_abs();
-		tmp_word = load_any_byte();
-		a ^= tmp_word;
+		a ^= load_any_byte(read_next_abs());
 		eor_bit_set();
 		break;
 	case 0x5D:                                                          // eor abs, x
-		read_next_abs_x();
-		tmp_word = load_any_byte();
-		a ^= tmp_word;
+		a ^= load_any_byte(read_next_abs_x());
 		eor_bit_set();
 		break;
 	case 0x59:                                                          // eor abs, y
-		read_next_abs_y();
-		tmp_word = load_any_byte();
-		a ^= tmp_word;
+		a ^= load_any_byte(read_next_abs_y());
 		eor_bit_set();
 		break;
 	case 0x41:                                                          // eor (zp, x)
-		read_next_zp_idx_ind();
-		tmp_word = load_any_byte();
-		a ^= tmp_word;
+		a ^= load_any_byte(read_next_zp_idx_ind());
 		eor_bit_set();
 		break;
 	case 0x51:                                                          // eor (zp), y
-		read_next_zp_ind_idx();
-		tmp_word = load_any_byte();
-		a ^= tmp_word;
+		a ^= load_any_byte(read_next_zp_ind_idx());
 		eor_bit_set();
 		break;
 	case 0x52:                                                          // eor (zp)    *
-		read_next_zp_ind();
-		tmp_word = load_any_byte();
-		a ^= tmp_word;
+		a ^= load_any_byte(read_next_zp_ind());
 		eor_bit_set();
 		break;
 	case 0x09:                                                          // ora #
-		read_next_imm();
-		a |= tmp_word;
+		a |= read_next_imm();
 		ora_bit_set();
 		break;
 	case 0x05:                                                          // ora zp
-		read_next_zp();
-		tmp_word = load_ram_byte();
-		a |= tmp_word;
+		a |= load_any_byte(read_next_zp());
 		ora_bit_set();
 		break;
 	case 0x15:                                                          // ora zp, x
-		read_next_zp_x();
-		tmp_word = load_ram_byte();
-		a |= tmp_word;
+		a |= load_any_byte(read_next_zp_x());
 		ora_bit_set();
 		break;
 	case 0x0D:                                                          // ora abs
-		read_next_abs();
-		tmp_word = load_any_byte();
-		a |= tmp_word;
+		a |= load_any_byte(read_next_abs());
 		ora_bit_set();
 		break;
 	case 0x1D:                                                          // ora abs, x
-		read_next_abs_x();
-		tmp_word = load_any_byte();
-		a |= tmp_word;
+		a |= load_any_byte(read_next_abs_x());
 		ora_bit_set();
 		break;
 	case 0x19:                                                          // ora abs, y
-		read_next_abs_y();
-		tmp_word = load_any_byte();
-		a |= tmp_word;
+		a |= load_any_byte(read_next_abs_y());
 		ora_bit_set();
 		break;
 	case 0x11:                                                          // ora (zp), y
-		read_next_zp_idx_ind();
-		tmp_word = load_any_byte();
-		a |= tmp_word;
+		a |= load_any_byte(read_next_zp_idx_ind());
 		ora_bit_set();
 		break;
 	case 0x01:                                                          // ora (zp, x)
-		read_next_zp_ind_idx();
-		tmp_word = load_any_byte();
-		a |= tmp_word;
+		a |= load_any_byte(read_next_zp_ind_idx());
 		ora_bit_set();
 		break;
 	case 0x12:                                                          // ora (zp)    *
-		read_next_zp_ind();
-		tmp_word = load_any_byte();
-		a |= tmp_word;
+		a |= load_any_byte(read_next_zp_ind());
 		ora_bit_set();
 		break;
 	case 0x69:                                                          // adc #
-		read_next_imm();
-		goto adc_end;
+		adc_common(read_next_imm());
+		break;
 	case 0x65:                                                          // adc zp
-		read_next_zp();
-		goto adc_mem;
+		adc_common(load_any_byte(read_next_zp()));
+		break;
 	case 0x75:                                                          // adc zp, x
-		read_next_zp_x();
-		goto adc_mem;
+		adc_common(load_any_byte(read_next_zp_x()));
+		break;
 	case 0x6D:                                                          // adc abs
-		read_next_abs();
-		goto adc_mem;
+		adc_common(load_any_byte(read_next_abs()));
+		break;
 	case 0x7D:                                                          // adc abs, x
-		read_next_abs_x();
-		goto adc_mem;
+		adc_common(load_any_byte(read_next_abs_x()));
+		break;
 	case 0x79:                                                          // adc abs, y
-		read_next_abs_y();
-		goto adc_mem;
+		adc_common(load_any_byte(read_next_abs_y()));
+		break;
 	case 0x61:                                                          // adc (zp, x)
-		read_next_zp_idx_ind();
-		goto adc_mem;
+		adc_common(load_any_byte(read_next_zp_idx_ind()));
+		break;
 	case 0x71:                                                          // adc (zp), y
-		read_next_zp_ind_idx();
-		goto adc_mem;
+		adc_common(load_any_byte(read_next_zp_ind_idx()));
+		break;
 	case 0x72:                                                          // adc (zp)    *
-		read_next_zp_ind();
-	adc_mem:
-		tmp_word = load_any_byte();
-	adc_end:
-		if(CHECK_BIT(p, DecimalBit))
-		{
-			// http://www.6502.org/tutorials/decimal_mode.html#A
-			tmp_byte = LOW_NIBBLE(a) + LOW_NIBBLE(tmp_word) + CHECK_BIT(p, CarryBit);   // 1a. AL = (A & $0F) + (B & $0F) + C
-			if(tmp_byte >= 0x0A) tmp_byte = LOW_NIBBLE(tmp_byte + 0x06) + 0x10;         // 1b. If AL >= $0A, then AL = ((AL + $06) & $0F) + $10
-			tmp_byte = (a & 0xF0) + (tmp_word & 0xF0) + tmp_byte;                       // 1c. A = (A & $F0) + (B & $F0) + AL
-			if(tmp_byte >= 0xA0)                                                        // 1e. If (A >= $A0), then A = A + $60
-			{
-				tmp_byte += 0x60;
-				SET_BIT(p, CarryBit);
-			}
-			else CLEAR_BIT(p, CarryBit);
-		}
-		else
-		{
-			tmp_byte = a + tmp_word + CHECK_BIT(p, CarryBit);
-			SET_BIT_TO(p, CarryBit, tmp_byte < a);
-		}
-		SET_BIT_TO(p, OverflowBit, !CHECK_BIT(tmp_word ^ a, 7) && CHECK_BIT(tmp_word ^ tmp_byte, 7)); //(M^result)&(N^result)&0x80 , !((M^N) & 0x80) && ((M^result) & 0x80)
-		a = tmp_byte;
-		adc_bit_set();
+		adc_common(load_any_byte(read_next_zp_ind()));
 		break;
 	case 0xE9:                                                          // sbc #
-		read_next_imm();
-		goto sbc_end;
+		sbc_common(read_next_imm());
+		break;
 	case 0xE5:                                                          // sbc zp
-		read_next_zp();
-		goto sbc_mem;
+		sbc_common(load_any_byte(read_next_zp()));
+		break;
 	case 0xF5:                                                          // sbc zp, x
-		read_next_zp_x();
-		goto sbc_mem;
+		sbc_common(load_any_byte(read_next_zp_x()));
+		break;
 	case 0xED:                                                          // sbc abs
-		read_next_abs();
-		goto sbc_mem;
+		sbc_common(load_any_byte(read_next_abs()));
+		break;
 	case 0xFD:                                                          // sbc abs, x
-		read_next_abs_x();
-		goto sbc_mem;
+		sbc_common(load_any_byte(read_next_abs_x()));
+		break;
 	case 0xF9:                                                          // sbc abs, y
-		read_next_abs_y();
-		goto sbc_mem;
+		sbc_common(load_any_byte(read_next_abs_y()));
+		break;
 	case 0xF1:                                                          // sbc (zp), y
-		read_next_zp_idx_ind();
-		goto sbc_mem;
+		sbc_common(load_any_byte(read_next_zp_idx_ind()));
+		break;
 	case 0xE1:                                                          // sbc (zp, x)
-		read_next_zp_ind_idx();
-		goto sbc_mem;
+		sbc_common(load_any_byte(read_next_zp_ind_idx()));
+		break;
 	case 0xF2:                                                          // sbc (zp)    *
-		read_next_zp_ind();
-	sbc_mem:
-		tmp_word = load_any_byte();
-	sbc_end:
-		if(CHECK_BIT(p, DecimalBit))
-		{
-			// http://www.6502.org/tutorials/decimal_mode.html#A
-			tmp_byte = LOW_NIBBLE(a) - LOW_NIBBLE(tmp_word) - !CHECK_BIT(p, CarryBit);   // AL = (A & $0F) - (B & $0F) + C-1
-			if(tmp_byte >= 0x80) tmp_byte = LOW_NIBBLE(tmp_byte - 0x06) - 0x10;          // If AL < 0, then AL = ((AL - $06) & $0F) - $10
-			tmp_byte = (a & 0xF0) - (tmp_word & 0xF0) + tmp_byte;                        // A = (A & $F0) - (B & $F0) + AL
-			if(tmp_byte >= 0x80)                                                         // If A < 0, then A = A - $60
-			{
-				tmp_byte -= 0x60;
-				CLEAR_BIT(p, CarryBit);
-			}
-			else SET_BIT(p, CarryBit);
-		}
-		else
-		{
-			tmp_byte = a - tmp_word - !CHECK_BIT(p, CarryBit);
-			SET_BIT_TO(p, CarryBit, tmp_byte <= a);
-		}
-		SET_BIT_TO(p, OverflowBit, CHECK_BIT(tmp_word ^ a, 7) && !CHECK_BIT(tmp_word ^ tmp_byte, 7)); //(M^result)&(N^result)&0x80 , !((M^N) & 0x80) && ((M^result) & 0x80)
-		a = tmp_byte;
-		sbc_bit_set();
+		sbc_common(load_any_byte(read_next_zp_ind()));
 		break;
 	default:                                                          // nop
 		break;
@@ -1745,6 +1691,10 @@ emulator_start:
 						SET_BIT(RAM[MY_DDRB], 7);
 						SET_BIT(RAM[MY_PORTB], 7);
 					}
+				#endif
+				#ifdef TIMER
+				Serial.print(micros() - timer);
+				Serial.println("us");
 				#endif
 			}
 			else
