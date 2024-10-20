@@ -1,13 +1,6 @@
-// !!!!! Remove tmp_byte/tmp_word !!!!!
-// !!!!! Remove replace goto with #define or function !!!!!
-// !!!!! replace RAM[tmp_word] with load_any_byte() !!!!!
-
-// Try out: remove tmp_word and tmp_byte, use local variables instead (more bytes maybe faster???)
-// Try out: or only tmp_word and tmp_byte (maybe faster and less bytes???)
-// Try out: remove goto-s (lot more bytes but faster)
+// !!!!! replace any to ram when zp or zp, x !!!!!
 
 // ToDo: Split into multiple parts (move loop() out)
-// ToDo: Split debug and no debug code (easier to read)
 // ToDo: Serial comm from emulator
 
 //#define TIMER
@@ -475,6 +468,7 @@ static inline void t1_end_start()
 	}
 }
 
+#if CHECK_BIT(VIA_SUPPORT, 2)
 static inline void t2_end_start()
 {
 	if(CHECK_BIT(RAM[MY_IFR], IFR_T2_Bit) && CHECK_BIT(eventFlags, T2_StartBit))
@@ -483,6 +477,7 @@ static inline void t2_end_start()
 		CLEAR_BIT(eventFlags, T2_StartBit);
 	}
 }
+#endif
 #endif
 
 #if CHECK_BIT(VIA_SUPPORT, 0)
@@ -655,6 +650,15 @@ void events_write(uint16_t address)
 			SET_BIT(eventFlags, T1_StartBit);
 			RAM[MY_T1CL] = RAM[MY_T1LL];
 			RAM[MY_T1LH] = RAM[MY_T1CH];
+
+			#if CHECK_BIT(VIA_SUPPORT, 0)
+				if(CHECK_BIT(RAM[MY_ACR], ACR_T1C2_Bit))
+				{
+					SET_BIT(RAM[MY_DDRB], 7);
+					CLEAR_BIT(RAM[MY_PORTB], 7);
+				}
+			#endif
+
 			#ifdef TIMER
 			Serial.println("start");
 			timer = micros();
@@ -696,10 +700,15 @@ void events_write(uint16_t address)
 	}
 }
 
-static inline uint8_t    load_rom_byte(uint16_t address)                 { events_read(address); return pgm_read_byte(ROM_data + RELATIVE_ROM_ADDRESS(address)); }
-static inline uint16_t   load_rom_word(uint16_t address)                 { events_read(address); events_read(address + 1); return pgm_read_word(ROM_data + RELATIVE_ROM_ADDRESS(address)); }
-static inline uint8_t    load_ram_byte(uint16_t address)                 { events_read(address); return RAM[address]; }
-static inline uint16_t   load_ram_word(uint16_t address)                 { return (load_ram_byte(address + 1) << 8) | load_ram_byte(address); }
+static inline uint8_t    load_rom_byte(uint16_t address)                 { return pgm_read_byte(ROM_data + RELATIVE_ROM_ADDRESS(address)); }
+static inline uint16_t   load_rom_word(uint16_t address)                 { return pgm_read_word(ROM_data + RELATIVE_ROM_ADDRESS(address)); }
+static inline uint8_t    load_ram_byte(uint16_t address)                 { if((address - 0x200) < 0x100) events_read(address); return RAM[address]; }
+static inline uint16_t   load_ram_word(uint16_t address)                 {
+	uint16_t tmp = address - 0x200;
+	if(tmp < 0xff) events_read(address + 1);
+	if(tmp < 0x100) events_read(address);
+	return RAM[address] | (RAM[address + 1] << 8);
+}
 static inline uint8_t    load_any_byte(uint16_t address)                 { return (is_rom(address) ? load_rom_byte(address) : load_ram_byte(address)); }
 static inline uint16_t   load_any_word(uint16_t address)                 { return (is_rom(address) ? load_rom_word(address) : load_ram_word(address)); }
 static inline void       write_ram_byte(uint8_t data, uint16_t address)  { RAM[address] = data; events_write(address); }
@@ -1704,13 +1713,6 @@ emulator_start:
 			else
 			{
 				if(--RAM[MY_T1CL] == 0xFF) --RAM[MY_T1CH];
-				#if CHECK_BIT(VIA_SUPPORT, 0)
-					if(CHECK_BIT(RAM[MY_ACR], ACR_T1C2_Bit))
-					{
-						SET_BIT(RAM[MY_DDRB], 7);
-						CLEAR_BIT(RAM[MY_PORTB], 7);
-					}
-				#endif
 			}
 		}
 		else                                                // timer 1 free run mode
